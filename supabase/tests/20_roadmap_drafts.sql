@@ -41,7 +41,7 @@ update public.roadmap_items set status = 'done', completed_at = now() where titl
 \echo '-- Maya rewrites an item or un-approves it (expect 2 errors):'
 update public.roadmap_items set title = 'Hacked' where title = 'Learn SQL';
 update public.roadmap_items set approval = 'pending' where title = 'Learn SQL';
-\echo '-- Maya renames a path (expect error), pins it (expect UPDATE 1):'
+\echo '-- Maya renames or pins a path directly (expect UPDATE 0, UPDATE 0: pinning goes through set_pin since 0006):'
 update public.roadmap_paths set name = 'Hacked';
 update public.roadmap_paths set status = 'pinned';
 

@@ -1,8 +1,10 @@
+import { appNow } from "../clock.ts";
+
 // Semester math for the roadmap's week strip. Fall starts in late August, spring in mid-January, 16 weeks each.
 
 export type Semester = { term: string; start: Date; week: number; weeks: number };
 
-export function currentSemester(now = new Date()): Semester {
+export function currentSemester(now = appNow()): Semester {
   const year = now.getFullYear();
   const fall = now.getMonth() >= 6; // July onward plans for fall, matching upcomingTerms() and current_term().
   const start = fall ? new Date(year, 7, 24) : new Date(year, 0, 12);

@@ -1,172 +1,196 @@
 import Link from "next/link";
 import { Backdrop } from "@/components/Backdrop";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Eyebrow, Panel, Pill, SwagStrip } from "@/components/student/ui";
 import { requireRole } from "@/lib/auth";
-import { plural, shortDate, shortTerm } from "@/lib/format";
-import { KIND_LABEL, planGroups, type PlanItem } from "@/lib/roadmap/plan";
+import { shortDate, shortTerm } from "@/lib/format";
+import { rewardsFor } from "@/lib/progress";
 import { currentSemester } from "@/lib/roadmap/semester";
+import { focusSteps, KIND_LABEL, loadRoadmap, upcomingEvents, type Step } from "@/lib/student-data";
 import { createClient } from "@/lib/supabase/server";
 import { removeStep, setItemDone } from "../actions";
 
 export const metadata = { title: "Action items · Melon" };
 
-type Item = PlanItem & { source: string };
-
-export default async function TasksPage({ searchParams }: { searchParams: Promise<{ more?: string }> }) {
-  const { more } = await searchParams;
+export default async function TasksPage() {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  const [{ data: roadmap }, { data: sp }, { data: itemRows }, { data: pathRows }] = await Promise.all([
-    supabase.from("roadmaps").select("status").eq("student_id", profile.id).maybeSingle(),
-    supabase.from("student_profiles").select("interests").eq("user_id", profile.id).maybeSingle(),
-    supabase
-      .from("roadmap_items")
-      .select("id, title, description, term, kind, status, path_id, due_date, firm, sort, source, resource_id, completed_at")
-      .eq("student_id", profile.id)
-      .order("sort"),
-    supabase.from("roadmap_paths").select("id, name").eq("student_id", profile.id),
-  ]);
-  const interests = sp?.interests ?? [];
+  const { roadmap, interests, paths, pinned, steps } = await loadRoadmap(supabase, profile.id);
 
   if (roadmap?.status !== "published") {
     return (
       <main className="relative mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8 sm:px-6">
         <Backdrop interests={interests} />
-        <h1 className="text-3xl font-extrabold tracking-tight">Action items</h1>
-        <p className="rounded-3xl border border-line bg-white/95 p-6 text-ink-2">
-          Your steps show up here once your advisor or coach approves your first roadmap.
-        </p>
+        <h1 className="text-3xl font-extrabold tracking-tight">Your action items</h1>
+        <p className="rounded-3xl border border-line bg-white/95 p-6 text-ink-2">Your steps show up here once your advisor or coach approves your first roadmap.</p>
       </main>
     );
   }
 
+  const [rewards, events] = await Promise.all([rewardsFor(supabase, profile.id), upcomingEvents(supabase, pinned, 8)]);
   const sem = currentSemester();
-  const items = (itemRows ?? []) as Item[];
-  const paths = new Map(((pathRows ?? []) as Array<{ id: string; name: string }>).map((p) => [p.id, p.name]));
-  const g = planGroups(items, sem);
-  const showMore = more === "1";
-  const firmSoon = g.open.filter((i) => i.firm && i.due_date).slice(0, 1)[0];
+  const f = focusSteps(steps, sem);
+  const pathName = new Map(paths.map((p) => [p.id, p.name]));
+  const doneThisTerm = f.done.filter((s) => s.completed_at && new Date(s.completed_at) >= sem.start);
+  // Firm dates: the student's own firm steps, then career center events that can't move.
+  const firm = [
+    ...[...f.now, ...f.unlocks].filter((s) => s.firm && s.due_date).map((s) => ({ key: s.id, date: s.due_date!, title: s.title })),
+    ...events
+      .filter((e) => e.starts_at && !steps.some((s) => s.resource_id === e.id || (s.kind === "event" && s.due_date === e.starts_at!.slice(0, 10))))
+      .map((e) => ({ key: e.id, date: e.starts_at!.slice(0, 10), title: e.title })),
+  ]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .filter((x, i, all) => all.findIndex((y) => y.title === x.title) === i)
+    .slice(0, 5);
 
   return (
-    <main className="relative mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="relative mx-auto flex max-w-7xl flex-col gap-5 px-4 py-8 sm:px-6">
       <Backdrop interests={interests} />
       <div>
-        <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: "var(--school)" }}>
-          {sem.term} · week {sem.week} of {sem.weeks}
-        </p>
-        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Action items</h1>
-        <p className="mt-1 text-ink-2">
-          {g.focus.length
-            ? `${plural(g.focus.length, "thing")} to focus on now. Finish one and the next moves up.`
-            : "Nothing open right now. Your next session will add more."}
-        </p>
+        <Eyebrow school>
+          {sem.term} · week {sem.week}
+        </Eyebrow>
+        <h1 className="mt-1 text-[28px] font-extrabold tracking-tight sm:text-3xl">Your action items</h1>
+        <p className="mt-1 text-ink-2">Three at a time, so it never piles up on top of your classes. Finish one and the next one unlocks.</p>
       </div>
 
-      {firmSoon && (
-        <p className="rounded-2xl bg-firm-bg px-4 py-3 text-sm font-semibold text-firm">
-          Firm date: {firmSoon.title} · {shortDate(firmSoon.due_date!)}
-        </p>
-      )}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <Panel hero>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-extrabold">This week</h2>
+              <Pill>{f.now.length} steps</Pill>
+            </div>
+            {f.now.length ? (
+              f.now.map((s) => <Row key={s.id} step={s} pathName={s.path_id ? pathName.get(s.path_id) : undefined} />)
+            ) : (
+              <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">All done for now. Nice work. Your next session will add more.</p>
+            )}
+          </Panel>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-extrabold">Now</h2>
-        {g.focus.length ? (
-          <div className="grid gap-3 md:grid-cols-3">
-            {g.focus.map((i) => (
-              <ItemCard key={i.id} item={i} pathName={i.path_id ? paths.get(i.path_id) : undefined} />
-            ))}
-          </div>
-        ) : (
-          <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">Everything here is done. Nice work.</p>
-        )}
-        {g.laterThisTerm.length > 0 &&
-          (showMore ? (
-            <>
-              <h3 className="mt-2 text-sm font-extrabold uppercase tracking-widest text-muted">Also this semester</h3>
-              <div className="grid gap-3 md:grid-cols-3">
-                {g.laterThisTerm.map((i) => (
-                  <ItemCard key={i.id} item={i} pathName={i.path_id ? paths.get(i.path_id) : undefined} />
+          {(f.unlocks.length > 0 || f.waiting.length > 0) && (
+            <Panel>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-extrabold">Unlocks next</h2>
+                <span className="text-xs text-muted">finish 1 step to open</span>
+              </div>
+              {f.unlocks.map((s) => (
+                <Locked key={s.id} title={s.title} note={s.due_date ? `${s.firm ? "Firm · " : "By "}${shortDate(s.due_date)}` : undefined} />
+              ))}
+              {f.waiting.map((s) => (
+                <Locked key={s.id} title={s.title} note="You added this. It waits in line." removable={s.source === "student" ? s.id : undefined} />
+              ))}
+              <span className="text-xs text-muted">During winter and summer break you get more steps at once.</span>
+            </Panel>
+          )}
+
+          {doneThisTerm.length > 0 && (
+            <Panel>
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-extrabold">Done this semester</h2>
+                <Pill tone="ok">{doneThisTerm.length}</Pill>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {doneThisTerm.map((s) => (
+                  <form key={s.id} action={setItemDone.bind(null, s.id, false)} className="contents">
+                    <button title="Undo" className="rounded-full bg-done-bg px-3 py-1.5 text-[13px] font-bold text-done-ink hover:line-through">
+                      ✓ {s.title}
+                    </button>
+                  </form>
                 ))}
               </div>
-              <Link href="/student/tasks" className="text-sm font-semibold text-link">
-                Show just my top 3
-              </Link>
-            </>
-          ) : (
-            <Link href="/student/tasks?more=1" className="self-start rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold hover:border-ink">
-              +{g.laterThisTerm.length} more this semester
-            </Link>
-          ))}
-      </section>
+            </Panel>
+          )}
+        </div>
 
-      {g.later.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-3xl border border-line bg-white/90 p-5">
-          <h2 className="text-lg font-extrabold">Coming up later</h2>
-          <ul className="flex flex-col divide-y divide-line">
-            {g.later.map((i) => (
-              <li key={i.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2 text-sm">
-                <span>
-                  <b>{i.title}</b>
-                  <span className="text-muted"> · {KIND_LABEL[i.kind] ?? i.kind}</span>
-                </span>
-                <span className="text-xs font-bold text-muted">{shortTerm(i.term)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {g.done.length > 0 && (
-        <section className="flex flex-col gap-2 rounded-3xl border border-line bg-white/90 p-5">
-          <h2 className="text-lg font-extrabold">Done ({g.done.length})</h2>
-          <ul className="flex flex-col divide-y divide-line">
-            {g.done.map((i) => (
-              <li key={i.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                <span>
-                  <span className="mr-2 font-bold text-done">✓</span>
-                  {i.title}
-                  {i.completed_at && <span className="text-muted"> · {shortDate(i.completed_at)}</span>}
-                </span>
-                <form action={setItemDone.bind(null, i.id, false)}>
-                  <SubmitButton label="Undo" variant="link" />
-                </form>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+        <div className="flex min-w-0 flex-col gap-3.5">
+          <Panel>
+            <h2 className="text-lg font-extrabold">Firm deadlines</h2>
+            <span className="text-xs text-muted">These dates can&apos;t move. We remind you 3 days and 1 day before.</span>
+            {firm.length ? (
+              firm.map((d) => (
+                <div key={d.key} className="flex items-center gap-3 rounded-[14px] border border-line bg-white px-3.5 py-3">
+                  <span className="w-14 shrink-0 text-sm font-extrabold text-firm">{shortDate(d.date)}</span>
+                  <b className="min-w-0 flex-1 text-sm">{d.title}</b>
+                  <Pill tone="firm">Firm</Pill>
+                </div>
+              ))
+            ) : (
+              <span className="text-sm text-muted">Nothing firm coming up.</span>
+            )}
+          </Panel>
+          {f.later.length > 0 && (
+            <Panel>
+              <h2 className="text-lg font-extrabold">Later semesters</h2>
+              {f.later.map((s) => (
+                <div key={s.id} className="flex items-baseline justify-between gap-2 text-sm">
+                  <span>{s.title}</span>
+                  <span className="shrink-0 text-xs font-bold text-muted">{shortTerm(s.term)}</span>
+                </div>
+              ))}
+            </Panel>
+          )}
+          {f.paused.length > 0 && (
+            <p className="rounded-2xl bg-soft px-4 py-3 text-xs text-ink-2">
+              {f.paused.length} step{f.paused.length === 1 ? " is" : "s are"} paused with a path you unpinned. Pin it again on your{" "}
+              <Link href="/student/roadmap" className="font-semibold text-link">
+                roadmap
+              </Link>{" "}
+              and they come back.
+            </p>
+          )}
+          <SwagStrip reward={rewards.next} label="Every step counts toward" />
+        </div>
+      </div>
     </main>
   );
 }
 
-function ItemCard({ item, pathName }: { item: Item; pathName?: string }) {
+function Row({ step, pathName }: { step: Step; pathName?: string }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-white p-4 shadow-sm">
-      <div className="flex flex-wrap gap-1.5">
-        <span className="rounded-full bg-soft px-2 py-0.5 text-[11px] font-bold text-ink-2">{KIND_LABEL[item.kind] ?? item.kind}</span>
-        {item.due_date ? (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${item.firm ? "bg-firm-bg text-firm" : "bg-soft text-ink-2"}`}>
-            {item.firm ? "Firm · " : "By "}
-            {shortDate(item.due_date)}
-          </span>
-        ) : (
-          <span className="rounded-full bg-soft px-2 py-0.5 text-[11px] font-bold text-ink-2">{shortTerm(item.term)}</span>
-        )}
-        {item.source === "student" && <span className="rounded-full bg-new-bg px-2 py-0.5 text-[11px] font-bold text-new-ink">You added</span>}
+    <div className="flex min-w-0 flex-wrap items-center gap-3 rounded-[14px] border border-line bg-white px-3.5 py-3">
+      <form action={setItemDone.bind(null, step.id, true)}>
+        <button aria-label={`Mark ${step.title} done`} title="Mark done" className="size-[22px] rounded-md border-2 border-[#9AA49F] bg-white hover:border-done hover:bg-done-bg" />
+      </form>
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <Link href={`/student/tasks/${step.id}`} className="font-bold hover:underline">
+          {step.title}
+        </Link>
+        <span className="text-xs text-muted">
+          {KIND_LABEL[step.kind] ?? step.kind} · {pathName ? `for ${pathName}` : "counts for every path"}
+        </span>
       </div>
-      <b className="text-[15px] leading-snug">{item.title}</b>
-      {item.description && <p className="text-xs text-muted">{item.description}</p>}
-      <p className="text-xs text-muted">{pathName ? `For: ${pathName}` : "Counts for every path"}</p>
-      <div className="mt-auto flex items-center gap-3">
-        <form action={setItemDone.bind(null, item.id, true)}>
-          <SubmitButton label="Mark done" variant="secondary" />
+      {step.due_date ? (
+        <Pill tone={step.firm ? "firm" : "plain"}>
+          {step.firm ? "Firm · " : "By "}
+          {shortDate(step.due_date)}
+        </Pill>
+      ) : step.source === "student" ? (
+        <Pill tone="new">You added</Pill>
+      ) : null}
+      <Link href={`/student/tasks/${step.id}`} className="rounded-full border border-ink px-3 py-1.5 text-[13px] font-bold">
+        Open
+      </Link>
+    </div>
+  );
+}
+
+function Locked({ title, note, removable }: { title: string; note?: string; removable?: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-[14px] border border-dashed border-line bg-white/60 px-3.5 py-3 text-muted">
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="5" y="11" width="14" height="10" rx="2" />
+        <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </svg>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <b className="text-sm">{title}</b>
+        {note && <span className="text-xs">{note}</span>}
+      </div>
+      {removable && (
+        <form action={removeStep.bind(null, removable)}>
+          <SubmitButton label="Remove" variant="link" />
         </form>
-        {item.source === "student" && (
-          <form action={removeStep.bind(null, item.id)}>
-            <SubmitButton label="Remove" variant="link" />
-          </form>
-        )}
-      </div>
+      )}
     </div>
   );
 }

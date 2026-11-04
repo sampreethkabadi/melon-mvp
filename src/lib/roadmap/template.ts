@@ -1,10 +1,13 @@
 import type { Answers } from "../onboarding/questions";
+import { careerCalendar, type CalendarKey } from "../calendar.ts";
+import { addDays } from "../clock.ts";
 import type { ClassYear } from "../types";
 
 // The first roadmap draft, built from templates plus the student's own answers. No AI yet: this is the
 // team's agreed fallback, and an advisor reviews and edits every draft before the student can see it.
+// It starts small on purpose: 3 steps for this semester, timed around the Fall Career Fair, plus one for next.
 
-export type DraftPath = { name: string; reason: string; first_job: string; sort: number; interest?: string };
+export type DraftPath = { name: string; reason: string; first_job: string; sort: number; interest?: string; status: "pinned" | "exploring" };
 export type DraftItem = {
   path_index?: number;
   term: string;
@@ -14,6 +17,8 @@ export type DraftItem = {
   rationale: string;
   evidence: Array<{ source: string; field: string }>;
   resource_id?: string;
+  due_date?: string;
+  firm?: boolean;
   sort: number;
 };
 export type Resource = { id: string; type: string; title: string; interests: string[] };
@@ -38,7 +43,9 @@ const CAREERS: Record<string, { name: string; first_job: string }> = {
 };
 
 // How many paths to keep open: broad early on, focused later.
-const PATH_LIMIT: Record<ClassYear, number> = { freshman: 3, sophomore: 3, junior: 2, senior: 4, grad: 4 };
+const PATH_LIMIT: Record<ClassYear, number> = { freshman: 3, sophomore: 3, junior: 2, senior: 2, grad: 2 };
+/** Freshmen and sophomores can pin 2 paths; juniors and up pin 1. Matches pin_limit() in the database. */
+export const PIN_LIMIT: Record<ClassYear, number> = { freshman: 2, sophomore: 2, junior: 1, senior: 1, grad: 1 };
 const BROAD_DEFAULTS = ["soft", "biz", "ux"];
 
 /** The next `count` terms starting from the current one, for example ["Fall 2026", "Spring 2027"]. */
@@ -61,112 +68,89 @@ export function upcomingTerms(now: Date, count: number): string[] {
 
 export function buildFirstRoadmap(input: DraftInput): { paths: DraftPath[]; items: DraftItem[] } {
   const { class_year: year, answers } = input;
-  const [now, next] = upcomingTerms(input.now ?? new Date(), 2);
+  const today = input.now ?? new Date();
+  const [now, next] = upcomingTerms(today, 2);
   const interests = input.interests.filter((i) => CAREERS[i]);
   const { paths, pathInterests } = buildPaths(input, interests);
-  const major = input.majors[0] ?? "your major";
+  const main = paths[0];
+  const mainInterest = pathInterests[0];
+  const pathWord = main ? lowerName(main.name) : "your field";
   const domain = text(answers.domain);
+  const focus = domain ?? (input.target_roles[0] ? lowerName(input.target_roles[0]) : pathWord);
+
+  // Dates from the career center's fall calendar, only while they're still ahead.
+  const cal = careerCalendar(today.getFullYear());
+  const todayIso = today.toISOString().slice(0, 10);
+  const when = (key: CalendarKey) => (cal[key] >= todayIso ? cal[key] : undefined);
+  const fair = when("fair1");
 
   const items: DraftItem[] = [];
   const add = (item: Omit<DraftItem, "sort">) => items.push({ ...item, sort: items.length });
   const from = (field: string, source = "onboarding") => [{ source, field }];
+  const resource = (title: string) => input.resources.find((r) => r.title === title)?.id;
 
-  // Links a library resource for one interest. It sits under a path only if that path is about the same interest.
-  const fromLibrary = (type: string, interest: string, term: string, kind: DraftItem["kind"]) => {
-    const r = input.resources.find((x) => x.type === type && x.interests.includes(interest) && !items.some((i) => i.resource_id === x.id));
-    if (!r) return;
-    const index = pathInterests.indexOf(interest);
-    add({
-      path_index: index >= 0 ? index : undefined,
-      term,
-      kind,
-      title: r.title,
-      description: "From your school's resource library.",
-      rationale: `A next step for your interest in ${CAREERS[interest].name.toLowerCase()}.`,
-      evidence: from("interests"),
-      resource_id: r.id,
-    });
-  };
-
-  add({
-    term: now,
-    kind: "coaching",
-    title: year === "freshman" || year === "sophomore" ? "Meet with your academic advisor" : "Meet with your career coach",
-    description: "Bring this roadmap and talk through what to change. Aim for at least one session each semester.",
-    rationale: year === "freshman" || year === "sophomore"
-      ? "In your first two years, courses and exploring matter most, so your advisor is the best first stop."
-      : "In your last years, career strategy matters most, so your coach is the best first stop.",
-    evidence: from("class_year"),
-  });
-
+  // Three steps to start, never more. Sessions and the student add the rest, a few at a time.
   if (year === "freshman") {
-    const unsure = answers.major_certainty !== "sure";
-    add({
-      term: now,
-      kind: "event",
-      title: unsure ? "Go to a majors and minors fair" : `Talk to two students in ${major}`,
-      description: unsure ? "Collect two or three majors worth a closer look." : "Ask what they wish they'd known in their first year.",
-      rationale: unsure ? "You said you're still working out your major." : "You're fairly sure about your major, so test it against real experience.",
-      evidence: from("major_certainty"),
-    });
-    add({ term: now, kind: "networking", title: "Join one club that sounds interesting", description: "It doesn't have to match your major. Go to two meetings before you decide.", rationale: "Trying things is the whole point of first year.", evidence: from("explored") });
-    add({ term: next, kind: "course", title: "Take one course outside your comfort zone", description: "Choose it with your advisor when you plan next semester.", rationale: "A course is a low-risk way to test an interest.", evidence: from("interests") });
-    if (answers.first_help === "resume") add({ term: next, kind: "coaching", title: "Write your first resume at drop-in hours", description: "Bring anything you've done: jobs, clubs, school projects.", rationale: "You said a first resume would help most.", evidence: from("first_help") });
-    if (answers.first_help === "careers") add({ term: next, kind: "networking", title: "Have one chat with someone in a job you're curious about", description: "Fifteen minutes is enough. Your coach can help you find someone.", rationale: "You said you want to see what careers exist.", evidence: from("first_help") });
-    pathInterests.forEach((interest) => interest && fromLibrary("skill", interest, next, "skill"));
+    add({ term: now, kind: "event", title: fair ? "Go to the Career Fair just to look around" : "Go to the next career fair just to look around", resource_id: fair ? resource(FAIR_DAY1) : undefined, description: "No resume needed. Walk around, grab some swag, and see who hires for what.", rationale: "Seeing the fair once makes next year's much easier.", evidence: from("class_year"), due_date: fair, firm: Boolean(fair) });
+    add({ term: now, kind: "coaching", title: "Make your first resume with the career center template", description: "Classes, clubs and any job count. One page is plenty.", rationale: answers.first_help === "resume" ? "You said a first resume would help most." : "Everything else gets easier once you have one.", evidence: from("first_help"), due_date: fair ? addDays(fair, -3) : undefined });
+    const c = clubFor(mainInterest);
+    add({ path_index: mainInterest ? 0 : undefined, term: now, kind: "networking", title: `Go to one ${c} meeting`, description: "Find it on beInvolved. Going once is enough to decide.", rationale: "Clubs are the easiest way to try a field and meet people.", evidence: from("interests"), resource_id: resource(c), due_date: `${today.getFullYear()}-09-30` });
+    if (main) add({ path_index: 0, term: next, kind: "course", title: `Pick one intro ${pathWord} course for spring`, description: "Choose it with your advisor when you plan next semester.", rationale: "A course is a low-risk way to test an interest.", evidence: from("interests") });
+  } else if (year === "sophomore") {
+    add({ term: now, kind: "coaching", title: "Get your resume reviewed at the pre-fair drop-in", resource_id: resource("Pre-fair resume review drop-in"), description: "Bring a printed copy. Ten minutes with a coach.", rationale: "A reviewed resume makes the fair less stressful.", evidence: from("class_year"), due_date: when("resumeDropIn"), firm: Boolean(when("resumeDropIn")) });
+    add({ term: now, kind: "event", title: "Build your 30-second pitch at the elevator pitch workshop", resource_id: resource("Elevator pitch workshop"), description: "Leave with a pitch you've said out loud at least once.", rationale: "Recruiters remember a clear 30 seconds.", evidence: from("class_year"), due_date: when("pitchWorkshop"), firm: Boolean(when("pitchWorkshop")) });
+    add({ term: now, kind: "event", title: "Talk to 3 companies at the fair and get a recruiter's name", resource_id: fair ? resource(FAIR_DAY1) : undefined, description: "Ask what they look for in sophomores.", rationale: "Names turn into internship leads next year.", evidence: from("class_year"), due_date: fair, firm: Boolean(fair) });
+    if (main) add({ path_index: 0, term: next, kind: "project", title: `Start a small ${pathWord} project`, description: "Keep it small enough to finish in a few weekends.", rationale: "Your first project to talk about.", evidence: from("try_next") });
+  } else {
+    const senior = year === "senior" || (year === "grad" && answers.goal !== "research");
+    const role = main?.first_job ?? "entry-level";
+    if (senior) {
+      add({ path_index: main ? 0 : undefined, term: now, kind: "application", title: `Apply to 5 full-time ${role} roles`, description: "Many fall postings close at the end of September.", rationale: "Fall is when most full-time hiring starts.", evidence: from("search_stage"), due_date: when("appCloses") });
+      add({ term: now, kind: "event", title: "Go to both days of the Career Fair", resource_id: fair ? resource(FAIR_DAY1) : undefined, description: "Day 1 is tech and data, Day 2 is business and analytics.", rationale: "Your last fall fair: make it count.", evidence: from("class_year"), due_date: fair, firm: Boolean(fair) });
+      add({ term: now, kind: "networking", title: "Get a free LinkedIn headshot at the fair", resource_id: resource("Free LinkedIn headshots"), description: "The booth is near the entrance.", rationale: answers.linkedin_status === "strong" ? "A fresh photo for a strong profile." : "A profile photo makes recruiters far more likely to look.", evidence: from("linkedin_status"), due_date: when("headshots"), firm: Boolean(when("headshots")) });
+      add({ term: next, kind: "coaching", title: "Go over offers with your coach", description: "Bring every offer, even ones you plan to turn down.", rationale: "Negotiating is easier with a plan.", evidence: from("search_stage") });
+    } else {
+      add({ term: now, kind: "event", title: "Practice at the mock career fair", resource_id: resource("Mock career fair"), description: "Real recruiters, practice pitches, no pressure.", rationale: "Practice the week before the real thing.", evidence: from("class_year"), due_date: when("mockFair"), firm: Boolean(when("mockFair")) });
+      add({ path_index: main ? 0 : undefined, term: now, kind: "application", title: `Apply to 3 ${role} internships before the fair`, description: "Then tell recruiters at the fair you've applied.", rationale: answers.internship === "applying" ? "You're already applying, so keep the momentum." : "Applying first gives you something to talk about.", evidence: from("internship"), due_date: fair ? addDays(fair, -1) : undefined });
+      add({ term: now, kind: "event", title: "Register for the Career Fair in Handshake", description: "It takes 2 minutes and gets you the employer list.", rationale: "Registered students get the map and list first.", evidence: from("class_year"), due_date: when("fairRegister"), firm: Boolean(when("fairRegister")) });
+      if (main) add({ path_index: 0, term: next, kind: "project", title: `Build a project that shows your ${focus} skills`, description: "Finish something small you can link from your resume.", rationale: "A project helps you stand out.", evidence: from(year === "junior" ? "domain" : "target_roles") });
+    }
   }
-
-  if (year === "sophomore") {
-    const tryNext = list(answers.try_next);
-    add({ path_index: 0, term: now, kind: "experience", title: `Try a Forage job simulation in ${paths[0].name.toLowerCase()}`, description: "Short, self-paced tasks that show what the work is really like.", rationale: tryNext.includes("simulation") ? "You said you'd try a job simulation." : "An easy way to narrow your interests without a big commitment.", evidence: from("try_next") });
-    add({ term: now, kind: "networking", title: "Have a chat with an alum", description: "Ask how they chose their path and what they'd do differently.", rationale: "From sophomore year, hearing real career stories helps you narrow down.", evidence: from("try_next") });
-    add({ term: next, kind: "event", title: "Go to a company info session", description: "Pick a company you know little about.", rationale: "You'll learn which kinds of workplaces appeal to you.", evidence: from("try_next") });
-    if (tryNext.includes("project")) add({ path_index: 0, term: next, kind: "project", title: "Build a small project on something you care about", description: "Keep it small enough to finish in a few weekends.", rationale: "You said you'd like to try a project.", evidence: from("try_next") });
-    if (answers.experience === "none") add({ term: next, kind: "application", title: "Apply for one summer role or campus job", description: "Anything related counts for a first step.", rationale: "You haven't had related experience yet.", evidence: from("experience") });
-    pathInterests.forEach((interest) => interest && fromLibrary("skill", interest, next, "skill"));
-  }
-
-  if (year === "junior" || year === "senior" || year === "grad") {
-    addCareerStrategy();
-  }
-
   return { paths, items };
+}
 
-  function addCareerStrategy() {
-    const linkedin = answers.linkedin_status;
-    const stage = text(answers.search_stage) ?? text(answers.internship);
-    const research = year === "grad" && answers.goal === "research";
-    const focus = domain ?? input.target_roles[0] ?? paths[0]?.name.toLowerCase() ?? major;
+/** "UX & Product design" -> "UX & product design": lower case, but acronyms like UX, AI and ML stay. */
+export function lowerName(name: string): string {
+  return name
+    .split(" ")
+    .map((w) => (/^[A-Z]{2,4}$/.test(w) ? w : w.toLowerCase()))
+    .join(" ");
+}
 
-    if (linkedin !== "strong") {
-      add({ term: now, kind: "networking", title: linkedin === "none" ? "Create your LinkedIn profile" : "Improve your LinkedIn profile", description: `Write your headline and summary around ${focus}.`, rationale: linkedin === "none" ? "You said you don't have one yet." : "You said yours is basic.", evidence: from("linkedin_status") });
-    }
-    add({ term: now, kind: "networking", title: `Reach out to three people working in ${focus}`, description: "Ask for a 15-minute chat, not a job.", rationale: "Most of a job search runs on people you know, so start before you need it.", evidence: from(year === "junior" ? "domain" : "target_roles") });
-    add({ term: now, kind: "event", title: "Prepare for the next career fair", description: "Research five companies and their roles, and practice a 30-second elevator pitch.", rationale: "Students who prepare get far more from a fair.", evidence: from("class_year") });
+/** Same rules as interest_from_text() in the database. Security comes first. */
+export function interestFromText(t: string): string | undefined {
+  if (/(cyber|security|infosec)/i.test(t)) return "cyber";
+  if (/(\bux\b|user experience|product design|design)/i.test(t)) return "ux";
+  if (/(software|developer|programming|web dev|engineer)/i.test(t) && !/(data|machine learning|ml)/i.test(t)) return "soft";
+  if (/(data|analytics|machine learning|\bml\b|\bai\b|statistics)/i.test(t)) return "data";
+  if (/(finance|business|consult|marketing|accounting|investment)/i.test(t)) return "biz";
+  if (/(health|medic|nurs|clinical)/i.test(t)) return "health";
+  if (/(\barts?\b|media|film|music|journalism)/i.test(t)) return "arts";
+  return undefined;
+}
 
-    if (stage === "not_started" && !research) {
-      add({ term: now, kind: "application", title: `Make an application plan for ${year === "junior" ? "internships" : "jobs"}`, description: "List 15 target companies and their deadlines, and set a weekly goal.", rationale: "You said you haven't started yet.", evidence: from(year === "junior" ? "internship" : "search_stage") });
-    } else if (stage === "applying") {
-      add({ term: now, kind: "coaching", title: "Review your applications with your coach", description: "Bring your resume and a list of where you've applied.", rationale: "You're applying now, so a second look pays off quickly.", evidence: from(year === "junior" ? "internship" : "search_stage") });
-    } else if (stage === "interviewing") {
-      add({ term: now, kind: "coaching", title: "Book a mock interview", description: "Practice with a role you're interviewing for.", rationale: "You're interviewing now.", evidence: from("search_stage") });
-    } else if (stage === "offer") {
-      add({ term: now, kind: "coaching", title: "Go over your offer with your coach", description: "Compare it with your goals before you decide.", rationale: "You said you have an offer.", evidence: from("search_stage") });
-    }
+const FAIR_DAY1 = "Fall Career Fair, Day 1: tech, data and engineering";
 
-    if (research) {
-      add({ term: next, kind: "networking", title: "Talk to two faculty members about research paths", description: "Ask about labs, funding and timelines.", rationale: "You said you're aiming for research or a PhD.", evidence: from("goal") });
-    }
-    if (input.target_roles.length) {
-      paths.forEach((p, i) => add({ path_index: i, term: now, kind: "application", title: `Read three job postings for ${p.name}`, description: "Note the skills they ask for most, and which of them you already have.", rationale: "You named this role, so this shows what it takes.", evidence: from("target_roles") }));
-    }
-    add({ path_index: 0, term: next, kind: "project", title: `Build a project that shows your skills in ${focus}`, description: "Finish something small you can link from your resume.", rationale: "A personal project helps you stand out in your field.", evidence: from(year === "junior" ? "domain" : "target_roles") });
-
-    interests.slice(0, 2).forEach((interest) => {
-      fromLibrary("certification", interest, next, "certification");
-      fromLibrary("course", interest, next, "course");
-    });
-  }
+const FIRST_CLUB: Record<string, string> = {
+  data: "Data Science Club",
+  cyber: "Cyber Security Club",
+  soft: "Computer Science Club",
+  ux: "UX Design & Research Club",
+  biz: "Product Management Club",
+  arts: "TEDxIU",
+};
+function clubFor(interest: string | undefined) {
+  return (interest && FIRST_CLUB[interest]) || "Women in Computing";
 }
 
 function buildPaths(input: DraftInput, interests: string[]): { paths: DraftPath[]; pathInterests: Array<string | undefined> } {
@@ -176,8 +160,15 @@ function buildPaths(input: DraftInput, interests: string[]): { paths: DraftPath[
   if (!early && input.target_roles.length) {
     const roles = input.target_roles.slice(0, limit);
     return {
-      paths: roles.map((role, sort) => ({ name: role, reason: "You named this as a role you're going for.", first_job: role, sort })),
-      pathInterests: roles.map(() => undefined),
+      paths: roles.map((role, sort) => ({
+        name: role,
+        reason: "You named this as a role you're going for.",
+        first_job: role,
+        sort,
+        interest: interestFromText(role) ?? interests[0],
+        status: sort === 0 ? "pinned" : "exploring",
+      })),
+      pathInterests: roles.map((role) => interestFromText(role) ?? interests[0]),
     };
   }
   const ids = [...interests];
@@ -191,10 +182,11 @@ function buildPaths(input: DraftInput, interests: string[]): { paths: DraftPath[
       first_job: CAREERS[id].first_job,
       sort,
       interest: id,
+      // Pin what the student said they like, up to their year's limit. Broad defaults stay unpinned.
+      status: interests.includes(id) && sort < PIN_LIMIT[input.class_year] ? "pinned" : "exploring",
     })),
     pathInterests: chosen,
   };
 }
 
 const text = (v: string | string[] | undefined) => (typeof v === "string" && v ? v : undefined);
-const list = (v: string | string[] | undefined) => (Array.isArray(v) ? v : v ? [v] : []);

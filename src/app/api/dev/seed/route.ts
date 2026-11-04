@@ -1,14 +1,17 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
-import { earlierConversation } from "@/lib/sessions/demo";
+import { earlierConversation, sampleConversation } from "@/lib/sessions/demo";
+import { sampleForStudent } from "@/lib/sessions/sample-for-student";
+import type { DraftInsight, Segment } from "@/lib/sessions/types";
 import { buildFirstRoadmap } from "@/lib/roadmap/template";
+import { ALUMNI, CLUBS, careerEvents, ladderResources } from "@/lib/catalog";
+import { addDays, appNow, DEMO_TODAY, localDate } from "@/lib/clock";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   SEED_APPOINTMENTS,
   SEED_COURSES,
   SEED_DONE_ANSWERS,
   SEED_INTEGRATIONS,
-  SEED_RESOURCES,
   SEED_REWARDS,
   SEED_SCHOOL,
   SEED_STAFF,
@@ -36,6 +39,12 @@ export async function GET(request: NextRequest) {
 
   const db = createAdminClient();
   const log: string[] = [];
+
+  // The demo clock, in step with NEXT_PUBLIC_DEMO_TODAY.
+  const { error: clockErr } = await db.from("app_settings").upsert({ id: true, demo_today: DEMO_TODAY });
+  if (clockErr) return fail(`demo date: ${clockErr.message}. Run migration 0006 first.`);
+  const today = localDate(appNow());
+  log.push(DEMO_TODAY ? `Demo date: ${DEMO_TODAY}` : "Using the real date");
 
   // School
   const { data: school, error: schoolErr } = await db
@@ -79,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   // Back to a clean start for every test student, so each rehearsal begins the same way.
   const studentIds = SEED_STUDENTS.map((s) => ids[s.email]);
-  for (const table of ["sessions", "advice_items", "activities", "profile_events", "roadmap_changes", "roadmap_items", "roadmap_paths", "staff_assignments", "appointments"]) {
+  for (const table of ["sessions", "advice_items", "activities", "profile_events", "roadmap_changes", "roadmap_items", "roadmap_paths", "staff_assignments", "appointments", "reward_claims", "student_moments"]) {
     const { error } = await db.from(table).delete().in("student_id", studentIds);
     if (error) return fail(`reset ${table}: ${error.message}`);
   }
@@ -109,7 +118,7 @@ export async function GET(request: NextRequest) {
         links: {},
         resume_path: null,
         resume_parsed: null,
-        updated_at: new Date().toISOString(),
+        updated_at: appNow().toISOString(),
       })
       .eq("user_id", id);
     if (error) return fail(`student ${s.email}: ${error.message}`);
@@ -125,13 +134,12 @@ export async function GET(request: NextRequest) {
   if (asgErr) return fail(`assignments: ${asgErr.message}`);
   log.push(`${assignments.length} advisor/coach assignments`);
 
-  // Today's appointments, each with that student's advisor
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: TZ }).format(new Date());
-  const offset = tzOffset(new Date());
-  const appts = SEED_APPOINTMENTS.map(([email, hhmm, type, modality, location]) => ({
+  // The demo day's appointments. The student picked each type when booking.
+  const offset = tzOffset(new Date(`${today}T12:00:00Z`));
+  const appts = SEED_APPOINTMENTS.map(([email, hhmm, type, modality, location, withWhom]) => ({
     school_id: schoolId,
     student_id: ids[email],
-    staff_id: ids[SEED_STUDENTS.find((s) => s.email === email)!.advisor],
+    staff_id: withWhom === "coach" ? coach : ids[SEED_STUDENTS.find((s) => s.email === email)!.advisor],
     starts_at: new Date(`${today}T${hhmm}:00${offset}`).toISOString(),
     type,
     modality,
@@ -140,7 +148,7 @@ export async function GET(request: NextRequest) {
   }));
   const { error: apErr } = await db.from("appointments").insert(appts);
   if (apErr) return fail(`appointments: ${apErr.message}`);
-  log.push(`${appts.length} appointments today`);
+  log.push(`${appts.length} appointments on ${today}`);
 
   // Maya's courses (from "school records")
   const maya = ids["maya@melon.test"];
@@ -149,12 +157,25 @@ export async function GET(request: NextRequest) {
     SEED_COURSES.map(([code, title, term, status]) => ({ school_id: schoolId, student_id: maya, code, title, term, status })),
   );
 
-  // Resource library, rewards, integrations
+  // Resource library: a short ladder per path and year, clubs on beInvolved, and career services events.
   await db.from("resources").delete().eq("school_id", schoolId).contains("tags", ["seed"]);
-  const { error: resErr } = await db
-    .from("resources")
-    .insert(SEED_RESOURCES.map((r) => ({ ...r, interests: [...r.interests], school_id: schoolId, tags: ["seed"] })));
+  const ladder = ladderResources();
+  const clubs = CLUBS.filter((c) => !ladder.some((r) => r.title === c.name)).map((c) => ({
+    type: "club" as const,
+    title: c.name,
+    provider: "beInvolved",
+    url: `https://beinvolved.indiana.edu/organizations?query=${encodeURIComponent(c.name)}`,
+    interests: c.interests,
+    source: "library" as const,
+    tags: ["seed", "club"],
+  }));
+  const library = [...ladder, ...clubs, ...careerEvents(Number(today.slice(0, 4)))];
+  const { error: resErr } = await db.from("resources").insert(library.map((r) => ({ ...r, school_id: schoolId, is_free: true })));
   if (resErr) return fail(`resources: ${resErr.message}`);
+
+  await db.from("alumni").delete().eq("school_id", schoolId);
+  const { error: alErr } = await db.from("alumni").insert(ALUMNI.map((a) => ({ ...a, school_id: schoolId })));
+  if (alErr) return fail(`alumni: ${alErr.message}`);
 
   await db.from("rewards").delete().eq("school_id", schoolId);
   const { error: rwErr } = await db.from("rewards").insert(SEED_REWARDS.map((r) => ({ ...r, school_id: schoolId })));
@@ -164,23 +185,23 @@ export async function GET(request: NextRequest) {
     .from("integrations")
     .upsert(SEED_INTEGRATIONS.map((i) => ({ ...i, school_id: schoolId })), { onConflict: "school_id,system" });
   if (inErr) return fail(`integrations: ${inErr.message}`);
-  log.push(`${SEED_RESOURCES.length} resources, ${SEED_REWARDS.length} rewards, ${SEED_INTEGRATIONS.length} integrations`);
+  log.push(`${library.length} resources, ${ALUMNI.length} alumni, ${SEED_REWARDS.length} rewards, ${SEED_INTEGRATIONS.length} integrations`);
 
   // Demo history. Priya has a draft waiting for review. Maya has a published roadmap and one reviewed session,
   // which is what makes her briefing worth reading when she moves to a new advisor.
-  const { data: library } = await db.from("resources").select("id, type, title, interests").eq("school_id", schoolId).order("title");
+  const { data: libraryRows } = await db.from("resources").select("id, type, title, interests").eq("school_id", schoolId).order("title");
   for (const [email, done] of Object.entries(SEED_DONE_ANSWERS)) {
     const s = SEED_STUDENTS.find((x) => x.email === email)!;
-    const { paths, items } = buildFirstRoadmap({ ...s, ...done, resources: library ?? [] });
+    const { paths, items } = buildFirstRoadmap({ ...s, ...done, resources: libraryRows ?? [], now: appNow() });
     const { error } = await db.rpc("replace_draft_roadmap", { p_student: ids[email], p_paths: paths, p_items: items });
     if (error) return fail(`draft ${email}: ${error.message}`);
   }
   const lee = ids["lee@melon.test"];
   const { error: pubErr } = await db.rpc("_publish_roadmap", { p_student: maya, p_actor: lee });
   if (pubErr) return fail(`publish: ${pubErr.message}`);
-  const history = await seedMayaSession(db, schoolId, maya, lee);
+  const history = await seedMayaHistory(db, schoolId, maya, coach, today);
   if (history) return fail(`Maya's history: ${history}`);
-  await db.from("roadmap_changes").update({ seen_at: new Date().toISOString() }).eq("student_id", maya);
+  await db.from("roadmap_changes").update({ seen_at: appNow().toISOString() }).eq("student_id", maya);
   log.push("Demo history ready");
 
   return NextResponse.json({
@@ -198,22 +219,61 @@ export async function GET(request: NextRequest) {
   }
 }
 
-/** A past reviewed session for Maya. Returns an error message if it fails. */
-async function seedMayaSession(db: ReturnType<typeof createAdminClient>, schoolId: string, student: string, staff: string) {
-  const when = new Date(Date.now() - 21 * 24 * 3600 * 1000).toISOString();
+/**
+ * Maya's story so far: a resume review with the coach last spring, a career exploration session a week ago
+ * (2 steps, both done since), and a few events, so Home has something to compare with. With today's
+ * career fair session she reaches 3 sessions, which unlocks the sticker pack live in the demo.
+ */
+async function seedMayaHistory(db: ReturnType<typeof createAdminClient>, schoolId: string, student: string, staff: string, today: string) {
+  const year = Number(today.slice(0, 4));
+  const resume = sampleConversation(await sampleForStudent(student, "Resume, cover letter or portfolio review"));
+  const spring = await seedPastSession(db, schoolId, student, staff, "Resume, cover letter or portfolio review", `${year}-03-04T19:00:00Z`, {
+    segments: resume.segments,
+    insights: resume.insights.filter((i) => i.kind === "summary" || i.kind === "advice"),
+  });
+  if (spring) return spring;
+  const fall = await seedPastSession(db, schoolId, student, staff, "Career exploration", new Date(`${addDays(today, -7)}T19:00:00Z`).toISOString(), earlierConversation("Maya"));
+  if (fall) return fall;
+
+  // Both steps from the fall session are done since.
+  const { data: steps } = await db.from("roadmap_items").select("id").eq("student_id", student).eq("source", "staff").order("created_at");
+  for (const [i, step] of (steps ?? []).entries()) {
+    const doneAt = new Date(`${addDays(today, -5 + i * 2)}T21:00:00Z`).toISOString();
+    await db.from("roadmap_items").update({ status: "done", completed_at: doneAt }).eq("id", step.id);
+    await db.from("advice_items").update({ status: "done" }).eq("roadmap_item_id", step.id);
+  }
+  const { error: actErr } = await db.from("activities").insert([
+    { school_id: schoolId, student_id: student, kind: "workshop", title: "Resume workshop", minutes: 60, occurred_at: `${year}-02-11T22:00:00Z` },
+    { school_id: schoolId, student_id: student, kind: "event", title: "Spring career fair", minutes: 120, occurred_at: `${year}-02-25T17:00:00Z` },
+    { school_id: schoolId, student_id: student, kind: "event", title: "the Data Science Club meetup", minutes: 60, occurred_at: `${addDays(today, -9)}T23:00:00Z` },
+  ]);
+  // Old news is already read, so the bell lights up only for what happens in the demo.
+  await db.from("notifications").update({ read_at: appNow().toISOString() }).eq("user_id", student);
+  return actErr?.message ?? null;
+}
+
+/** One reviewed session in the past, with its transcript and approved highlights. Returns an error or null. */
+async function seedPastSession(
+  db: ReturnType<typeof createAdminClient>,
+  schoolId: string,
+  student: string,
+  staff: string,
+  type: string,
+  when: string,
+  sample: { segments: Segment[]; insights: DraftInsight[] },
+) {
   const { data: session, error } = await db
     .from("sessions")
-    .insert({ school_id: schoolId, student_id: student, staff_id: staff, status: "ready_for_review", transcript_source: "sample", started_at: when, ended_at: when, created_at: when })
+    .insert({ school_id: schoolId, student_id: student, staff_id: staff, status: "ready_for_review", transcript_source: "sample", session_type: type, started_at: when, ended_at: when, created_at: when })
     .select("id")
     .single();
   if (error || !session) return error?.message ?? "no session";
-  const sample = earlierConversation("Maya");
   const { data: segments, error: segErr } = await db
     .from("transcript_segments")
     .insert(sample.segments.map((s) => ({ ...s, school_id: schoolId, session_id: session.id, student_id: student })))
     .select("id, idx");
   if (segErr || !segments) return segErr?.message ?? "no transcript";
-  for (const insight of sample.insights) {
+  for (const [n, insight] of sample.insights.entries()) {
     const { data: row, error: insErr } = await db
       .from("insights")
       .insert({
@@ -226,7 +286,7 @@ async function seedMayaSession(db: ReturnType<typeof createAdminClient>, schoolI
         reviewed_by: staff,
         reviewed_at: when,
         model_ref: "saved-sample-v1",
-        created_at: when,
+        created_at: new Date(Date.parse(when) + n * 1000).toISOString(),
       })
       .select("id")
       .single();
@@ -234,7 +294,12 @@ async function seedMayaSession(db: ReturnType<typeof createAdminClient>, schoolI
     await db.from("insight_evidence").insert(insight.evidence.map((idx) => ({ insight_id: row.id, segment_id: segments.find((s) => s.idx === idx)!.id })));
   }
   const { error: applyErr } = await db.rpc("_apply_session_review", { p_session: session.id });
-  return applyErr?.message ?? null;
+  if (applyErr) return applyErr.message;
+  // Dates as they really happened.
+  await db.from("activities").update({ occurred_at: when }).eq("student_id", student).eq("kind", "session").eq("title", type);
+  await db.from("roadmap_changes").update({ created_at: when, seen_at: when }).eq("session_id", session.id);
+  await db.from("profile_events").update({ occurred_at: when }).eq("source_ref", session.id);
+  return null;
 }
 
 function safeEqual(a: string, b: string) {

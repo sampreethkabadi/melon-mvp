@@ -13,6 +13,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3 | Student roadmap page | ✅ |
 | 4 | Staff: Today, briefing, consent, capture, transcript, review, roadmap publishing and updates | ✅ |
 | 3 (rest) | Student app: home, action items, sessions, rewards, resources, notifications | ✅ |
+| 3b | Feedback round: fewer steps, one-click approval, pins by year, session types, highlights and flags, demo date | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -21,7 +22,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql) [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql) and [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -42,6 +43,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | `SEED_PASSWORD` | a password for the test accounts, 10+ characters |
 | `ANTHROPIC_API_KEY` | optional: Claude drafts session suggestions |
 | `DEEPGRAM_API_KEY` | optional: turns recordings into transcripts, and turns on the record button |
+| `NEXT_PUBLIC_DEMO_TODAY` | optional: the date the app pretends is today. Defaults to `2026-09-03`, two weeks before the Fall Career Fair. Set `off` for the real date, then re-open the test data link |
 
 3. Click **Deploy**. If you add or change a variable later, redeploy (Deployments > ⋯ > Redeploy).
 
@@ -50,29 +52,30 @@ Career roadmaps that remember every advising session. This is the proof of conce
 Open `https://YOUR-VERCEL-LINK/api/dev/seed?secret=YOUR_SEED_SECRET` in a browser. It's safe to run again, and **running it again resets every test student**, so use it to start each rehearsal clean. It creates:
 
 - **School:** Indiana University (accepts `@iu.edu` and `@melon.test` emails)
-- **Advisors:** `lee@`, `malik@`, `becker@melon.test`, with 4 students each
-- **Others:** `rivera@melon.test` (career coach, assigned to everyone), `admin@melon.test` (admin)
-- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and a past session), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
+- **Demo day:** Thursday, Sep 3, 2026. The Fall Career Fair is Sep 17–18, and the career center's events (resume drop-in, pitch workshop, mock fair, alumni chat) are dated around it.
+- **Advisors (courses and policy):** `lee@`, `malik@`, `becker@melon.test`, with 4 students each
+- **Career coach (careers):** `rivera@melon.test`, assigned to everyone. `admin@melon.test` (admin)
+- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
 - **Other students:** `ava@`, `daniel@`, `nina@`, `omar@` (Malik), `grace@`, `tyler@`, `zoe@`, `marcus@` (Becker), all `@melon.test`
-- Today's appointments, a resource library, 3 rewards, 5 integrations
+- Demo-day appointments, each with the type the student booked (for example Maya: Course planning with Lee, Career fair preparation with Rivera)
+- A short "start here, then this" list per path and year, clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations
 
 Sign in to test accounts with **Have a test account? Use a password** and your `SEED_PASSWORD`.
 
 ## Demo walkthrough
 
-Use two browser windows, or one normal and one private: Lee in one, Maya in the other. Reset first by opening the test data link.
+Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
-1. **Lee, Reviews:** open Priya's draft, edit or remove an item, then **Approve and publish**. Priya can now see it. She couldn't before.
-2. **Lee, Today:** open Maya's briefing, then **Start session** and **I agree to record**.
-3. **Maya, Home:** **I agree**. Lee's screen updates on its own.
-4. **Lee:** **Use the sample conversation**, **Or paste a sample transcript** (start each turn with the speaker, like `Advisor: Hello`), or record if `DEEPGRAM_API_KEY` is set. Check the suggestions against the transcript, accept, edit or reject each one, then **Finish review and update roadmap**.
-5. **Maya, Roadmap:** the Branch Tree shows a new **Cybersecurity** branch from the session (the sample conversation mentions it), a "What changed" card, and the accepted actions in this semester's next steps. Her background colors change to match. Mark one done, and it shows as done in Lee's advice tracker.
-6. **Maya, Resources:** **Add to my roadmap** on any card. It shows up on Roadmap and Action items straight away, marked "You added", and **Remove** takes it off. She can't remove steps her advisor added.
-7. **Maya, Action items:** her top 3, then **+N more this semester**, later semesters and what's done. **Home** counts what she showed up for, about how much time, her streak and her closest reward. **Sessions** shows each checked summary and what she agreed to do. The bell shows new notifications.
-8. **Maya, Rewards:** an unlocked reward has **Claim it**, which gives a pickup code for the career center desk. **Moments** takes an optional event photo that only she and her team can see.
-9. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, so there's no cold start.
+1. **Maya, Home:** what matters this week on top (next step, next session, closest reward), her semester recap below. **Roadmap:** 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
+2. **Rivera, Today:** open Maya's briefing (Career fair preparation), then **Start session** and **I agree to record**. **Maya, Home:** **I agree**.
+3. **Rivera:** **Use the sample conversation**. Check the highlights, remove or edit anything wrong, then **Looks good · send to Maya**. One click; nothing else to approve.
+4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 sessions). **Claim it** gives a pickup code.
+5. **Maya, Roadmap:** **Switch my pin to this path**. Juniors and up pin one path, so Data analyst pauses its steps, and "Building your path" and **Resources** switch to cybersecurity. Pin Data analyst again and its steps come back.
+6. **Maya, Sessions:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
+7. **Lee, Today:** Maya's **Course planning** session. Advisor samples stay on courses and policy, and their steps are course steps.
+8. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, and the roadmap shows as a short card with the full version one click away.
 
-With no API keys, this all still works. The screens say when a conversation is a sample and when suggestions were saved in advance or drafted by rules. If Claude is unavailable, the session falls back the same way.
+Freshmen and sophomores can pin 2 paths and get gentler lists; juniors and up pin 1. With no API keys, all of this still works: the screens say when a conversation is a sample and when suggestions were saved in advance.
 
 ## How new sign-ups get an advisor
 
@@ -89,7 +92,9 @@ Enforced in the database, not just the app (see the migration):
 - Recording consent can't be edited or deleted, and only the person themself can give it. Both people must agree before audio is stored.
 - Students can't see AI suggestions until their advisor or coach accepts them. Every suggestion links to the transcript lines behind it, and one with no evidence is dropped.
 - Viewing a transcript is written to the audit log.
-- Students can add library resources to their own roadmap and remove only the steps they added. Event photos are private to the student and their advisor or coach.
+- Students can add library resources to their own roadmap and remove only the steps they added. They can tick steps done but can't queue, pause or approve them. Event photos are private to the student and their advisor or coach.
+- At most 5 open steps this semester and 2 new steps per session. Extra steps wait in line (or are saved for later, which only staff see).
+- Students can flag a highlight; only their advisor or coach can change or close the flag.
 - New sign-ups are students; staff roles are set by an admin. Emails from other domains are refused.
 
 ## Run it on your computer (optional)
@@ -102,14 +107,14 @@ npm run dev                  # http://localhost:3000
 
 ## Resumes, roadmaps and AI
 
-Resume text is read with plain rules on our own server, and email and phone aren't kept. The first roadmap comes from year-by-year templates plus the student's answers, then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
+Resume text is read with plain rules on our own server, and email and phone aren't kept. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
 
 **Known gap:** audio isn't deleted automatically yet. `recordings.delete_after` is set to 30 days, but nothing acts on it. Add a scheduled job before using anything other than mock data.
 
 ## Tests
 
 ```bash
-npm test   # resume reading, roadmap templates and step ordering
+npm test   # resume reading, roadmap templates, step ordering and session samples
 ```
 
 ## Database tests
@@ -123,9 +128,11 @@ psql -f supabase/migrations/0002_roadmap_drafts.sql
 psql -f supabase/migrations/0003_sessions_and_assignment.sql
 psql -f supabase/migrations/0004_branch_tree.sql
 psql -f supabase/migrations/0005_student_tabs.sql
+psql -f supabase/migrations/0006_focus_and_pins.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
 psql -f supabase/tests/40_branch_tree.sql
 psql -f supabase/tests/50_student_tabs.sql
+psql -f supabase/tests/60_focus_and_pins.sql
 ```

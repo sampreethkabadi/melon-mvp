@@ -8,10 +8,11 @@ import { INSIGHT_LABEL, type InsightKind } from "@/lib/sessions/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
+  approveSession,
   chooseNotesOnly,
+  resolveFlag,
   correctSegment,
   editInsight,
-  finishReview,
   giveStaffConsent,
   pasteTranscript,
   retryProcessing,
@@ -40,18 +41,20 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const supabase = await createClient();
   const { data: session } = await supabase
     .from("sessions")
-    .select("id, school_id, status, mode, transcript_source, student_id, staff_id, created_at, student:profiles!sessions_student_id_fkey(full_name)")
+    .select("id, school_id, status, mode, transcript_source, session_type, student_id, staff_id, created_at, student:profiles!sessions_student_id_fkey(full_name)")
     .eq("id", id)
     .maybeSingle();
   if (!session) notFound();
   const studentName = (session.student as unknown as { full_name: string } | null)?.full_name ?? "this student";
   const mine = session.staff_id === profile.id;
 
-  const [{ data: consents }, { data: segmentRows }, { data: insightRows }] = await Promise.all([
+  const [{ data: consents }, { data: segmentRows }, { data: insightRows }, { data: flagRows }] = await Promise.all([
     supabase.from("consents").select("subject_id, granted, scope, created_at").eq("session_id", id).eq("scope", "record").order("created_at"),
     supabase.from("transcript_segments").select("id, idx, speaker, text, start_ms").eq("session_id", id).order("idx"),
     supabase.from("insights").select("id, kind, status, model_ref, payload, insight_evidence(segment_id)").eq("session_id", id).order("created_at"),
+    supabase.from("insight_flags").select("id, insight_id, note, status, created_at").eq("session_id", id).eq("status", "open"),
   ]);
+  const flags = (flagRows ?? []) as Array<{ id: string; insight_id: string; note: string | null }>;
   const segments = (segmentRows ?? []) as Segment[];
   const insights = (insightRows ?? []) as unknown as Insight[];
 
@@ -78,7 +81,9 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         <Link href={`/staff/students/${session.student_id}`} className="text-sm font-semibold text-link">
           ← {studentName}
         </Link>
-        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Session with {studentName}</h1>
+        <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
+          {session.session_type ?? "Session"} with {studentName}
+        </h1>
         {session.transcript_source && <p className="mt-1 text-sm text-muted">{SOURCE_NOTE[session.transcript_source]}</p>}
       </div>
 
@@ -195,17 +200,50 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
 
           <section className="flex flex-col gap-3 rounded-3xl border-2 bg-white/95 p-6" style={{ borderColor: "var(--school)" }}>
             <div>
-              <h2 className="text-lg font-extrabold">{status === "reviewed" ? "Reviewed suggestions" : "Review before anything reaches the student"}</h2>
-              <p className="text-sm text-muted">{MODEL_NOTE(insights[0]?.model_ref ?? null)}. Check each one against the transcript.</p>
+              <h2 className="text-lg font-extrabold">{status === "reviewed" ? "Sent to " + studentName.split(" ")[0] : "Check it, then approve in one click"}</h2>
+              <p className="text-sm text-muted">
+                {MODEL_NOTE(insights[0]?.model_ref ?? null)}. {studentName.split(" ")[0]} sees the summary and highlights, never the AI draft. At most 2 steps go on
+                their roadmap.
+              </p>
             </div>
+            {flags.length > 0 && mine && (
+              <div className="flex flex-col gap-2 rounded-2xl border-2 border-[#F2C14E] bg-warn-bg p-4">
+                <h3 className="font-extrabold text-warn-ink">{studentName.split(" ")[0]} flagged {flags.length === 1 ? "a highlight" : `${flags.length} highlights`}</h3>
+                {flags.map((f) => {
+                  const insight = insights.find((i) => i.id === f.insight_id);
+                  return (
+                    <form key={f.id} action={resolveFlag.bind(null, id, f.id)} className="flex flex-col gap-2 rounded-xl bg-white p-3">
+                      {f.note && <p className="text-sm">&ldquo;{f.note}&rdquo;</p>}
+                      <textarea name="text" defaultValue={insight?.payload.text ?? ""} aria-label="Corrected highlight" className="rounded-xl border border-line px-3 py-2 text-sm" />
+                      <div className="flex flex-wrap gap-2">
+                        <button name="choice" value="fix" className="rounded-full bg-ink px-4 py-2 text-sm font-extrabold text-white">
+                          Save the fix
+                        </button>
+                        <button name="choice" value="remove" className="rounded-full border border-line bg-white px-4 py-2 text-sm font-semibold">
+                          Remove it
+                        </button>
+                        <button name="choice" value="keep" className="text-sm font-semibold text-link">
+                          It&apos;s right, keep it
+                        </button>
+                      </div>
+                    </form>
+                  );
+                })}
+              </div>
+            )}
             {insights.length === 0 && <p className="text-sm text-muted">Melon found nothing to suggest from this transcript.</p>}
             {insights.map((insight) => (
               <InsightCard key={insight.id} sessionId={id} insight={insight} segments={segments} editable={status === "ready_for_review" && mine} />
             ))}
             {status === "ready_for_review" && mine && (
-              <FinishReview id={id} left={insights.filter((i) => i.status === "proposed").length} />
+              <form action={approveSession.bind(null, id)} className="flex flex-col gap-1.5">
+                <SubmitButton label={`Looks good · send to ${studentName.split(" ")[0]}`} />
+                <span className="text-xs text-muted">Remove anything that&apos;s wrong first. Everything else is approved together.</span>
+              </form>
             )}
-            {status === "reviewed" && <p className="rounded-xl bg-done-bg px-3 py-2 text-sm font-semibold text-done-ink">Done. What you accepted is now on the student&apos;s profile and roadmap.</p>}
+            {status === "reviewed" && (
+              <p className="rounded-xl bg-done-bg px-3 py-2 text-sm font-semibold text-done-ink">Done. The highlights and steps are on {studentName.split(" ")[0]}&apos;s roadmap.</p>
+            )}
           </section>
         </div>
       )}
@@ -235,15 +273,25 @@ function Line({ segment }: { segment: Segment }) {
 
 function InsightCard({ sessionId, insight, segments, editable }: { sessionId: string; insight: Insight; segments: Segment[]; editable: boolean }) {
   const evidence = insight.insight_evidence.map((e) => segments.find((s) => s.id === e.segment_id)).filter((s): s is Segment => Boolean(s)).sort((a, b) => a.idx - b.idx);
-  const rejected = insight.status === "rejected";
-  const decided = insight.status !== "proposed";
+  const removed = insight.status === "rejected";
+  const tone =
+    insight.kind === "action" || insight.kind === "course_change"
+      ? "border-done/40 bg-done-bg/50"
+      : insight.kind === "advice"
+        ? "border-new/40 bg-new-bg/60"
+        : insight.kind === "concern"
+          ? "border-line bg-soft"
+          : "border-line bg-white";
   return (
-    <article className={`flex flex-col gap-2 rounded-2xl border p-4 ${rejected ? "border-line bg-soft" : decided ? "border-done bg-done-bg/40" : "border-line bg-white"}`}>
+    <article className={`flex flex-col gap-1.5 rounded-2xl border p-3.5 ${removed ? "border-line bg-soft opacity-70" : tone}`}>
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-extrabold uppercase tracking-widest text-muted">{INSIGHT_LABEL[insight.kind]}</span>
-        {decided && <span className="text-xs font-bold text-ink-2">{rejected ? "Rejected" : insight.status === "edited" ? "Edited and accepted" : "Accepted"}</span>}
+        <span className="text-xs font-extrabold uppercase tracking-widest text-muted">
+          {INSIGHT_LABEL[insight.kind]}
+          {insight.kind === "concern" ? " · only staff see this" : ""}
+        </span>
+        {removed ? <span className="text-xs font-bold text-ink-2">Removed</span> : insight.status === "edited" ? <span className="text-xs font-bold text-ink-2">Edited</span> : null}
       </div>
-      <p className={rejected ? "text-muted line-through" : ""}>{insight.payload.text}</p>
+      <p className={removed ? "text-muted line-through" : ""}>{insight.payload.text}</p>
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
         Evidence:
         {evidence.map((s) => (
@@ -253,39 +301,21 @@ function InsightCard({ sessionId, insight, segments, editable }: { sessionId: st
         ))}
       </p>
       {editable && (
-        <div className="flex flex-wrap items-center gap-2">
-          {!decided ? (
-            <>
-              <form action={reviewInsight.bind(null, sessionId, insight.id, "accepted")}>
-                <SubmitButton label="Accept" variant="secondary" />
+        <div className="flex flex-wrap items-center gap-3">
+          <form action={reviewInsight.bind(null, sessionId, insight.id, removed ? "proposed" : "rejected")}>
+            <SubmitButton label={removed ? "Undo" : "Remove"} variant="link" />
+          </form>
+          {!removed && (
+            <details className="w-full">
+              <summary className="cursor-pointer text-sm font-semibold text-link">Edit</summary>
+              <form action={editInsight.bind(null, sessionId, insight.id)} className="mt-2 flex flex-col items-start gap-2">
+                <textarea name="text" defaultValue={insight.payload.text} aria-label="Edit suggestion" className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
+                <SubmitButton label="Save" variant="secondary" />
               </form>
-              <form action={reviewInsight.bind(null, sessionId, insight.id, "rejected")}>
-                <SubmitButton label="Reject" variant="secondary" />
-              </form>
-            </>
-          ) : (
-            <form action={reviewInsight.bind(null, sessionId, insight.id, "proposed")}>
-              <SubmitButton label="Undo" variant="link" />
-            </form>
+            </details>
           )}
-          <details className="w-full">
-            <summary className="cursor-pointer text-sm font-semibold text-link">Edit</summary>
-            <form action={editInsight.bind(null, sessionId, insight.id)} className="mt-2 flex flex-col items-start gap-2">
-              <textarea name="text" defaultValue={insight.payload.text} aria-label="Edit suggestion" className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
-              <SubmitButton label="Save and accept" variant="secondary" />
-            </form>
-          </details>
         </div>
       )}
     </article>
-  );
-}
-
-function FinishReview({ id, left }: { id: string; left: number }) {
-  if (left > 0) return <p className="rounded-xl bg-soft px-3 py-2 text-sm font-semibold text-ink-2">{left} left to review</p>;
-  return (
-    <form action={finishReview.bind(null, id)}>
-      <SubmitButton label="Finish review and update roadmap" />
-    </form>
   );
 }

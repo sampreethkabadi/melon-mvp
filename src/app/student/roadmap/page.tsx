@@ -1,88 +1,28 @@
 import Link from "next/link";
 import { Backdrop, INTEREST_COLORS } from "@/components/Backdrop";
 import { SubmitButton } from "@/components/SubmitButton";
+import { AddButton, Eyebrow, Pill, ResCard, SwagStrip } from "@/components/student/ui";
 import { firstName, requireRole } from "@/lib/auth";
 import { shortDate, shortTerm } from "@/lib/format";
-import { KIND_LABEL, planGroups } from "@/lib/roadmap/plan";
+import { rewardsFor } from "@/lib/progress";
 import { currentSemester, weekOf } from "@/lib/roadmap/semester";
+import { alumniFor, focusSteps, KIND_LABEL, loadRoadmap, pathLadders, pinLimit, type Path, type Step } from "@/lib/student-data";
 import { createClient } from "@/lib/supabase/server";
-import { YEAR_LABEL, type ClassYear } from "@/lib/types";
-import { addResource, markChangesSeen, pinPath, setItemDone } from "../actions";
+import { YEAR_LABEL } from "@/lib/types";
+import { addResource, markChangesSeen, setItemDone, setPin } from "../actions";
 
 export const metadata = { title: "Roadmap · Melon" };
 
-type Item = {
-  id: string;
-  title: string;
-  description: string | null;
-  rationale: string | null;
-  term: string | null;
-  kind: string;
-  status: string;
-  path_id: string | null;
-  due_date: string | null;
-  firm: boolean;
-  sort: number;
-  resource_id: string | null;
-  completed_at: string | null;
-};
-type Path = {
-  id: string;
-  name: string;
-  reason: string | null;
-  first_job: string | null;
-  status: "pinned" | "exploring" | "backup" | "dropped";
-  interest: string | null;
-  created_from_session: string | null;
-  created_at: string;
-};
 type Change = { id: string; summary: { kind?: string; added?: string[] }; session_id: string | null; seen_at: string | null; created_at: string };
-type PastSession = { id: string; created_at: string; staff: { full_name: string } | null };
-type Resource = { id: string; type: string; title: string; provider: string | null; source: string; url: string | null };
+type PastSession = { id: string; created_at: string; session_type: string | null; staff: { full_name: string; role: string } | null };
 
-const RESOURCE_LABEL: Record<string, string> = {
-  skill: "Skill",
-  certification: "Certification",
-  event: "Event",
-  course: "Course",
-  coaching: "Coaching",
-};
+const RUNG = ["Start here", "Then", "Then"];
 
 export default async function RoadmapPage() {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  const [{ data: roadmap }, { data: sp }, { data: pathRows }, { data: itemRows }, { data: changeRows }, { data: sessionRows }, { data: summaryRows }] =
-    await Promise.all([
-      supabase.from("roadmaps").select("status, published_at").eq("student_id", profile.id).maybeSingle(),
-      supabase.from("student_profiles").select("interests, class_year, majors").eq("user_id", profile.id).maybeSingle(),
-      supabase
-        .from("roadmap_paths")
-        .select("id, name, reason, first_job, status, interest, created_from_session, created_at")
-        .eq("student_id", profile.id)
-        .order("sort"),
-      supabase
-        .from("roadmap_items")
-        .select("id, title, description, rationale, term, kind, status, path_id, due_date, firm, sort, resource_id, completed_at")
-        .eq("student_id", profile.id)
-        .order("sort"),
-      supabase.from("roadmap_changes").select("id, summary, session_id, seen_at, created_at").eq("student_id", profile.id).order("created_at", { ascending: false }).limit(20),
-      supabase
-        .from("sessions")
-        .select("id, created_at, staff:profiles!sessions_staff_id_fkey(full_name)")
-        .eq("student_id", profile.id)
-        .eq("status", "reviewed")
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("insights")
-        .select("payload, created_at")
-        .eq("student_id", profile.id)
-        .eq("kind", "summary")
-        .in("status", ["accepted", "edited"])
-        .order("created_at", { ascending: false })
-        .limit(1),
-    ]);
-
-  const interests = sp?.interests ?? [];
+  const data = await loadRoadmap(supabase, profile.id);
+  const { roadmap, year, interests, paths: allPaths, pinned, steps } = data;
 
   if (roadmap?.status !== "published") {
     return (
@@ -97,38 +37,47 @@ export default async function RoadmapPage() {
     );
   }
 
-  const items = (itemRows ?? []) as Item[];
-  const allPaths = (pathRows ?? []) as Path[];
+  const [{ data: changeRows }, { data: sessionRows }, ladders, alumni, rewards] = await Promise.all([
+    supabase.from("roadmap_changes").select("id, summary, session_id, seen_at, created_at").eq("student_id", profile.id).order("created_at", { ascending: false }).limit(20),
+    supabase
+      .from("sessions")
+      .select("id, created_at, session_type, staff:profiles!sessions_staff_id_fkey(full_name, role)")
+      .eq("student_id", profile.id)
+      .eq("status", "reviewed")
+      .order("created_at", { ascending: true }),
+    pathLadders(supabase, pinned, year),
+    alumniFor(supabase, pinned),
+    rewardsFor(supabase, profile.id),
+  ]);
+
+  const sem = currentSemester();
   const changes = (changeRows ?? []) as unknown as Change[];
   const unseen = changes.filter((c) => !c.seen_at);
   const sessions = (sessionRows ?? []) as unknown as PastSession[];
-  const latestSummary = (summaryRows?.[0]?.payload as { text?: string } | undefined)?.text;
-
-  const sem = currentSemester();
-  const paths = allPaths.filter((p) => p.status !== "dropped");
   const dropped = allPaths.filter((p) => p.status === "dropped");
-  const newPathIds = new Set(
-    paths.filter((p) => p.created_from_session && unseen.some((c) => c.session_id === p.created_from_session)).map((p) => p.id),
-  );
+  const isFresh = (p: Path) => Boolean(p.created_from_session && unseen.some((c) => c.session_id === p.created_from_session));
+  // Pinned paths first, then a branch that just grew, so both sit on the first row of the fork.
+  const rank = (p: Path) => (p.status === "pinned" ? 0 : isFresh(p) ? 1 : 2);
+  const paths = allPaths.filter((p) => p.status !== "dropped").sort((a, b) => rank(a) - rank(b));
+  const newPaths = paths.filter(isFresh);
+  const newIds = new Set(newPaths.map((p) => p.id));
+  const newSessionIds = new Set(unseen.map((c) => c.session_id).filter(Boolean));
+  const isNewStep = (s: Step) => (s.evidence ?? []).some((e) => e.session_id && newSessionIds.has(e.session_id));
   const pathName = new Map(paths.map((p) => [p.id, p.name]));
+  const f = focusSteps(steps, sem);
+  const limit = pinLimit(year);
+  const pinnedCount = pinned.length;
 
-  const { open, nowItems, focus, moreCount, done: doneItems } = planGroups(items, sem);
-  const keyDates = open
-    .filter((i) => i.due_date)
-    .map((i) => ({ item: i, week: weekOf(sem, new Date(`${i.due_date}T12:00:00`)) }))
-    .filter((x): x is { item: Item; week: number } => x.week !== null)
+  const keyDates = [...f.now, ...f.unlocks]
+    .filter((s) => s.due_date)
+    .map((s) => ({ step: s, week: weekOf(sem, new Date(`${s.due_date}T12:00:00`)) }))
+    .filter((x): x is { step: Step; week: number } => x.week !== null)
+    .sort((a, b) => a.step.due_date!.localeCompare(b.step.due_date!))
     .slice(0, 3);
   const keyWeeks = new Set(keyDates.map((k) => k.week));
-
-  // Resources for the student's interests that aren't already a step on the roadmap.
-  const { data: resRows } = interests.length
-    ? await supabase.from("resources").select("id, type, title, provider, source, url").overlaps("interests", interests).limit(12)
-    : { data: [] };
-  const resources = ((resRows ?? []) as Resource[]).filter((r) => !items.some((i) => i.title === r.title || i.resource_id === r.id)).slice(0, 4);
-
-  const year = sp?.class_year ? YEAR_LABEL[sp.class_year as ClassYear] : null;
-  const themeLabel = interests.map((i: string) => INTEREST_COLORS[i]?.label).filter(Boolean).join(" + ");
-  const addedFromSessions = (sessionId: string) =>
+  const onRoadmap = new Set(steps.map((s) => s.resource_id).filter(Boolean));
+  const themeLabel = interests.map((i) => INTEREST_COLORS[i]?.label).filter(Boolean).join(" + ");
+  const addedBy = (sessionId: string) =>
     changes.filter((c) => c.session_id === sessionId).reduce((n, c) => n + (c.summary.added?.filter((a) => !a.startsWith("New path")).length ?? 0), 0);
 
   return (
@@ -137,22 +86,20 @@ export default async function RoadmapPage() {
 
       {/* The tree: where you've been, where you are, where you could go. */}
       <section aria-label="Your path" className="order-2 flex flex-col lg:order-1">
-        <p className="text-xs font-extrabold uppercase tracking-widest text-muted">Your growth so far</p>
+        <Eyebrow>Your growth so far</Eyebrow>
         <ol className="ml-2.5 mt-3 flex flex-col gap-3.5 border-l-[5px] border-[#B9C9BF] pb-2 pl-6">
-          {roadmap.published_at && (
-            <TrunkEntry when={roadmap.published_at} text="Your roadmap started" />
-          )}
+          {roadmap.published_at && <TrunkEntry when={roadmap.published_at} text="Your roadmap started" />}
           {sessions.map((s) => {
-            const added = addedFromSessions(s.id);
+            const added = addedBy(s.id);
             return (
               <TrunkEntry
                 key={s.id}
                 when={s.created_at}
-                text={`Session with ${s.staff?.full_name ?? "your advisor"}${added ? ` · ${added} step${added === 1 ? "" : "s"} added` : ""}`}
+                text={`${s.session_type ?? "Session"} with ${s.staff?.full_name ?? "your team"}${added ? ` · ${added} step${added === 1 ? "" : "s"}` : ""}`}
               />
             );
           })}
-          {doneItems.length > 0 && <TrunkEntry text={`${doneItems.length} step${doneItems.length === 1 ? "" : "s"} done`} />}
+          {f.done.length > 0 && <TrunkEntry text={`${f.done.length} step${f.done.length === 1 ? "" : "s"} done`} />}
           {dropped.map((p) => (
             <TrunkEntry key={p.id} text={`${p.name} (explored)`} explored />
           ))}
@@ -164,59 +111,77 @@ export default async function RoadmapPage() {
             style={{ borderColor: "var(--school)", boxShadow: "0 0 0 8px color-mix(in srgb, var(--school) 14%, transparent)" }}
           />
           <span className="flex flex-col">
-            <b className="text-base font-extrabold">{sem.term.split(" ")[0]} &apos;{sem.term.slice(-2)} · you are here</b>
+            <b className="text-base font-extrabold">{shortTerm(sem.term)} · you are here</b>
             <span className="text-xs text-muted">
-              {nowItems.length} step{nowItems.length === 1 ? "" : "s"} open this semester
+              {f.now.length + f.unlocks.length} step{f.now.length + f.unlocks.length === 1 ? "" : "s"} open · you can pin {limit} path{limit === 1 ? "" : "s"}
             </span>
           </span>
         </div>
 
-        <Fork paths={paths} newIds={newPathIds} />
-        <p className="mb-2 text-sm text-ink-2">{forkCaption(paths, newPathIds.size > 0)}</p>
+        <Fork paths={paths} newIds={newIds} />
+        <p className="mb-2 text-sm text-ink-2">{forkCaption(paths, newIds.size > 0, limit)}</p>
         <div className={`grid gap-2.5 ${paths.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
           {paths.map((p) => (
             <BranchCard
               key={p.id}
               path={p}
-              isNew={newPathIds.has(p.id)}
-              upcoming={open.filter((i) => i.path_id === p.id).slice(0, 3)}
+              isNew={newIds.has(p.id)}
+              upcoming={steps.filter((s) => s.path_id === p.id && (s.status === "active" || s.status === "paused")).slice(0, 3)}
+              pausedCount={steps.filter((s) => s.path_id === p.id && s.status === "paused").length}
+              canPin={pinnedCount < limit || limit === 1}
+              switches={limit === 1 && pinnedCount >= 1}
             />
           ))}
         </div>
         {paths.length === 0 && <p className="text-sm text-muted">No paths yet. Your advisor or coach will add some with you.</p>}
+
+        {alumni.length > 0 && (
+          <details className="mt-3 rounded-2xl border border-line bg-white/90 p-3">
+            <summary className="cursor-pointer text-sm font-bold text-link">See where grads like you went</summary>
+            <ul className="mt-2 flex flex-col gap-2">
+              {alumni.map((a) => (
+                <li key={a.id} className="text-sm">
+                  <b>{a.name}</b> · {a.degree} &apos;{String(a.grad_year).slice(2)} → {a.title} at {a.employer}
+                  <span className="block text-xs text-muted">{a.story} Ask your career coach for an intro.</span>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
       </section>
 
       {/* This semester. */}
-      <section className="order-1 flex min-w-0 flex-col gap-5 rounded-3xl border-2 lg:order-2 bg-white/95 p-5 shadow-[0_14px_40px_rgba(20,33,27,.10)] sm:p-6" style={{ borderColor: "var(--school)" }}>
-        {unseen.length > 0 && <WhatChanged changes={unseen} />}
+      <section
+        className="order-1 flex min-w-0 flex-col gap-[18px] rounded-[22px] border-2 bg-white/95 p-5 shadow-[0_14px_40px_rgba(20,33,27,.10)] sm:p-6 lg:order-2"
+        style={{ borderColor: "var(--school)" }}
+      >
+        {unseen.length > 0 && <WhatChanged changes={unseen} newPath={newPaths.find((p) => p.status !== "pinned")} switches={limit === 1 && pinnedCount >= 1} />}
 
         <div>
-          <p className="text-xs font-extrabold uppercase tracking-widest" style={{ color: "var(--school)" }}>
+          <Eyebrow school>
             This semester · {sem.term} · week {sem.week} of {sem.weeks}
-          </p>
-          <h1 className="mt-1 text-3xl font-extrabold tracking-tight">
-            {newPathIds.size ? "Your roadmap grew a new branch." : `Hi ${firstName(profile.full_name)}, here's your focus.`}
+          </Eyebrow>
+          <h1 className="mt-1 text-[28px] font-extrabold leading-tight tracking-tight sm:text-3xl">
+            {newIds.size ? "Your roadmap grew a new branch." : `Hi ${firstName(profile.full_name)}, here's your focus.`}
           </h1>
-          <p className="mt-1 text-ink-2">{[year, sp?.majors?.[0], themeLabel && `theme: ${themeLabel}`].filter(Boolean).join(" · ")}</p>
+          <p className="mt-1 text-ink-2">{[year && YEAR_LABEL[year], data.majors[0], themeLabel && `theme: ${themeLabel}`].filter(Boolean).join(" · ")}</p>
         </div>
 
         <div className="flex flex-col gap-1.5">
           <div className="flex gap-[3px]" aria-hidden="true">
             {Array.from({ length: sem.weeks }, (_, i) => i + 1).map((w) => (
-              <span
+              <i
                 key={w}
                 className="h-2.5 flex-1 rounded-[3px]"
-                style={{
-                  background: w < sem.week ? "#B9C9BF" : w === sem.week ? "var(--school)" : keyWeeks.has(w) ? "#8E9893" : "var(--color-line)",
-                }}
+                style={{ background: w < sem.week ? "#B9C9BF" : w === sem.week ? "var(--school)" : keyWeeks.has(w) ? "#8E9893" : "var(--color-line)" }}
               />
             ))}
           </div>
           <p className="flex flex-wrap justify-between gap-2 text-xs text-muted">
             <span>Week 1</span>
             {keyDates.map((k) => (
-              <span key={k.item.id} className={k.item.firm ? "font-bold text-ink" : ""}>
-                {k.item.title.length > 28 ? `${k.item.title.slice(0, 26)}…` : k.item.title} · {shortDate(k.item.due_date!)}
+              <span key={k.step.id} className={k.step.firm ? "font-bold text-ink" : ""}>
+                {k.step.title.length > 30 ? `${k.step.title.slice(0, 28)}…` : k.step.title} · {shortDate(k.step.due_date!)}
               </span>
             ))}
             <span>Finals</span>
@@ -224,78 +189,61 @@ export default async function RoadmapPage() {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <h2 className="text-lg font-extrabold">Your next {focus.length > 1 ? focus.length : ""} step{focus.length === 1 ? "" : "s"}</h2>
-          {focus.length ? (
+          <div className="flex items-baseline gap-3">
+            <h2 className="text-lg font-extrabold">Your next {f.now.length > 1 ? f.now.length : ""} step{f.now.length === 1 ? "" : "s"}</h2>
+            <Link href="/student/tasks" className="ml-auto text-sm font-semibold text-link">
+              All action items
+            </Link>
+          </div>
+          {f.now.length ? (
             <div className="grid gap-3 md:grid-cols-3">
-              {focus.map((i) => (
-                <StepCard key={i.id} item={i} pathName={i.path_id ? pathName.get(i.path_id) : undefined} />
+              {f.now.map((s) => (
+                <StepCard key={s.id} step={s} pathName={s.path_id ? pathName.get(s.path_id) : undefined} isNew={isNewStep(s)} />
               ))}
             </div>
           ) : (
-            <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">
-              Everything here is done. Your next session will add more.
-            </p>
+            <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">Everything here is done. Your next session will add more.</p>
           )}
-          {moreCount > 0 && (
-            <p className="text-sm font-semibold text-muted">
-              +{moreCount} more after these. Finish one and the next moves up.
-            </p>
+          {f.unlocks.length > 0 && (
+            <span className="text-sm font-semibold text-muted">
+              +{f.unlocks.length} more unlock{f.unlocks.length === 1 ? "s" : ""} when you finish one
+            </span>
           )}
         </div>
 
-        {latestSummary && (
-          <div className="rounded-2xl bg-soft px-4 py-3">
-            <p className="text-xs font-extrabold uppercase tracking-widest text-muted">From your latest session</p>
-            <p className="mt-1 text-ink-2">{latestSummary}</p>
-          </div>
-        )}
-
-        {resources.length > 0 && (
+        {ladders.length > 0 && (
           <div className="flex flex-col gap-2.5">
-            <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-baseline gap-3">
               <h2 className="text-lg font-extrabold">Building your path</h2>
-              <Link href="/student/resources" className="text-sm font-semibold text-link">
-                See all resources
+              <Link href="/student/resources" className="ml-auto text-sm font-semibold text-link">
+                All resources
               </Link>
             </div>
-            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
-              {resources.map((r) => (
-                <div key={r.id} className={`flex min-w-0 flex-col gap-0.5 rounded-xl p-3 ${r.source === "melon" ? "bg-new-bg" : "bg-[#F3F8FB]"}`}>
-                  <span className={`text-[11px] font-bold uppercase tracking-wider ${r.source === "melon" ? "text-new-ink" : "text-link"}`}>
-                    {r.source === "melon" ? "Suggested by Melon" : RESOURCE_LABEL[r.type] ?? r.type}
-                  </span>
-                  <b className="text-sm">{r.title}</b>
-                  {r.url ? (
-                    <a href={r.url} target="_blank" rel="noreferrer" className="text-xs font-semibold text-link">
-                      {r.provider ?? "Open"}
-                    </a>
-                  ) : (
-                    <span className="text-xs text-muted">{r.provider}</span>
-                  )}
-                  <form action={addResource.bind(null, r.id)} className="mt-1.5">
-                    <SubmitButton label="Add to my roadmap" variant="link" />
-                  </form>
+            {ladders.map(({ path, rungs }) => (
+              <div key={path.id} className="flex flex-col gap-2">
+                {ladders.length > 1 && <span className="text-xs font-bold text-muted">For {path.name}</span>}
+                <div className="grid gap-2.5 sm:grid-cols-3">
+                  {rungs.map((r, i) => (
+                    <ResCard
+                      key={r.id}
+                      kicker={RUNG[i]}
+                      title={r.title}
+                      provider={r.provider}
+                      url={r.url}
+                      isNew={i === 0}
+                      action={onRoadmap.has(r.id) ? <span className="text-xs font-bold text-done-ink">✓ On your roadmap</span> : <AddButton action={addResource.bind(null, r.id)} />}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         )}
-
-        {doneItems.length > 0 && (
-          <details className="rounded-2xl border border-line px-4 py-3">
-            <summary className="cursor-pointer text-sm font-extrabold">Done so far ({doneItems.length})</summary>
-            <ul className="mt-2 flex flex-col gap-1.5">
-              {doneItems.map((i) => (
-                <li key={i.id} className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-muted line-through">{i.title}</span>
-                  <form action={setItemDone.bind(null, i.id, false)}>
-                    <SubmitButton label="Undo" variant="link" />
-                  </form>
-                </li>
-              ))}
-            </ul>
-          </details>
+        {pinned.length === 0 && paths.length > 0 && (
+          <p className="rounded-2xl bg-soft px-4 py-3 text-sm text-ink-2">Pin a path and Melon picks a short &quot;start here&quot; list for it.</p>
         )}
+
+        <SwagStrip reward={rewards.next} />
       </section>
     </main>
   );
@@ -318,10 +266,9 @@ function TrunkEntry({ when, text, explored }: { when?: string; text: string; exp
 function Fork({ paths, newIds }: { paths: Path[]; newIds: Set<string> }) {
   const cols = Math.min(paths.length, 2);
   if (!cols) return null;
-  const firstRow = paths.slice(0, cols);
   return (
     <svg className="block h-11 w-full" viewBox="0 0 100 44" preserveAspectRatio="none" aria-hidden="true">
-      {firstRow.map((p, i) => {
+      {paths.slice(0, cols).map((p, i) => {
         const x = ((i + 0.5) / cols) * 100;
         const color = newIds.has(p.id) ? "#8B7CF6" : p.status === "pinned" ? "#14211B" : "#9AA49F";
         return (
@@ -341,83 +288,102 @@ function Fork({ paths, newIds }: { paths: Path[]; newIds: Set<string> }) {
   );
 }
 
-function BranchCard({ path, isNew, upcoming }: { path: Path; isNew: boolean; upcoming: Item[] }) {
+function BranchCard({
+  path,
+  isNew,
+  upcoming,
+  pausedCount,
+  canPin,
+  switches,
+}: {
+  path: Path;
+  isNew: boolean;
+  upcoming: Step[];
+  pausedCount: number;
+  canPin: boolean;
+  switches: boolean;
+}) {
   const pinned = path.status === "pinned";
   const style = pinned
     ? "border-2 border-ink bg-white/85"
     : isNew
       ? "border-2 border-dashed border-new bg-white/90 shadow-[0_0_0_6px_rgba(139,124,246,.18)]"
-      : path.status === "backup"
-        ? "border-[1.5px] border-dashed border-[#9AA49F] bg-white/60 opacity-85"
-        : "border-[1.5px] border-dashed border-[#9AA49F] bg-white/65";
+      : "border-[1.5px] border-dashed border-[#9AA49F] bg-white/65";
   return (
     <div className={`flex min-w-0 flex-col gap-2 rounded-2xl p-3 ${style}`}>
       <div className="flex flex-wrap items-center gap-1.5 text-sm font-extrabold">
         <span className="min-w-0">{path.name}</span>
-        {pinned && <span className="rounded-full bg-ink px-2 py-0.5 text-[11px] font-bold text-white">Pinned</span>}
-        {isNew && <span className="rounded-full bg-new-bg px-2 py-0.5 text-[11px] font-extrabold text-new-ink">New</span>}
-        {path.status === "backup" && <span className="rounded-full bg-soft px-2 py-0.5 text-[11px] font-bold text-ink-2">Backup</span>}
+        {pinned && <Pill tone="dark">Pinned</Pill>}
+        {isNew && <Pill tone="new">New</Pill>}
+        {!pinned && pausedCount > 0 && <Pill>Paused</Pill>}
       </div>
       {path.reason && <p className="text-xs text-muted">{path.reason}</p>}
       {upcoming.length > 0 && (
         <ul className="flex flex-col gap-1.5">
-          {upcoming.map((i) => (
-            <li key={i.id} className="flex flex-col text-xs text-ink-2">
-              <em className="text-[11px] font-bold not-italic text-muted">{shortTerm(i.term)}</em>
-              {i.title}
+          {upcoming.map((s) => (
+            <li key={s.id} className={`flex flex-col text-xs ${s.status === "paused" ? "text-muted" : "text-ink-2"}`}>
+              <em className="text-[11px] font-bold not-italic text-muted">{shortTerm(s.term)}</em>
+              {s.title}
             </li>
           ))}
         </ul>
       )}
+      {!pinned && pausedCount > 0 && <p className="text-[11px] text-muted">Pin it again and these come back.</p>}
       {path.first_job && (
         <span className="self-start rounded-lg bg-ink/[.07] px-2.5 py-1.5 text-xs font-extrabold text-ink-2">First job: {path.first_job}</span>
       )}
-      {!pinned && (
-        <form action={pinPath.bind(null, path.id)}>
-          <SubmitButton label="Pin this path" variant="link" />
+      {pinned ? (
+        <form action={setPin.bind(null, path.id, false)}>
+          <SubmitButton label="Unpin" variant="link" />
         </form>
+      ) : canPin ? (
+        <form action={setPin.bind(null, path.id, true)}>
+          <SubmitButton label={switches ? "Switch to this path" : "Pin this path"} variant="link" />
+        </form>
+      ) : (
+        <span className="text-[11px] text-muted">Unpin one to pin this.</span>
       )}
     </div>
   );
 }
 
-function StepCard({ item, pathName }: { item: Item; pathName?: string }) {
+function StepCard({ step, pathName, isNew }: { step: Step; pathName?: string; isNew: boolean }) {
   return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-2xl border border-line bg-white p-3.5">
+    <div className={`flex min-w-0 flex-col gap-2 rounded-[14px] bg-white p-3.5 ${isNew ? "border-2 border-new" : "border border-line"}`}>
       <div className="flex flex-wrap gap-1.5">
-        <span className="rounded-full bg-soft px-2 py-0.5 text-[11px] font-bold text-ink-2">{KIND_LABEL[item.kind] ?? item.kind}</span>
-        {item.due_date ? (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${item.firm ? "bg-firm-bg text-firm" : "bg-soft text-ink-2"}`}>
-            {item.firm ? "Firm · " : "By "}
-            {shortDate(item.due_date)}
-          </span>
-        ) : (
-          <span className="rounded-full bg-soft px-2 py-0.5 text-[11px] font-bold text-ink-2">{shortTerm(item.term)}</span>
-        )}
+        {isNew && <Pill tone="new">New</Pill>}
+        <Pill>{KIND_LABEL[step.kind] ?? step.kind}</Pill>
+        {step.due_date ? (
+          <Pill tone={step.firm ? "firm" : "plain"}>
+            {step.firm ? "Firm · " : "By "}
+            {shortDate(step.due_date)}
+          </Pill>
+        ) : null}
       </div>
-      <b className="text-[15px] leading-snug">{item.title}</b>
-      {item.description && <p className="text-xs text-muted">{item.description}</p>}
+      <Link href={`/student/tasks/${step.id}`} className="text-[15px] font-bold leading-snug underline decoration-[#B9C2BD] underline-offset-[3px]">
+        {step.title}
+      </Link>
       <p className="text-xs text-muted">{pathName ? `For: ${pathName}` : "Counts for every path"}</p>
-      <form action={setItemDone.bind(null, item.id, true)} className="mt-auto">
+      <form action={setItemDone.bind(null, step.id, true)} className="mt-auto">
         <SubmitButton label="Mark done" variant="secondary" />
       </form>
     </div>
   );
 }
 
-function WhatChanged({ changes }: { changes: Change[] }) {
+function WhatChanged({ changes, newPath, switches }: { changes: Change[]; newPath?: Path; switches: boolean }) {
   const added = changes.flatMap((c) => c.summary.added ?? []);
   const newPaths = added.filter((a) => a.startsWith("New path"));
   const steps = added.filter((a) => !a.startsWith("New path"));
   const firstPublish = changes.some((c) => c.summary.kind === "published");
   return (
-    <div className="flex flex-col gap-2.5 rounded-2xl bg-[#1E1B3A] p-4 text-white">
-      <p className="text-xs font-extrabold uppercase tracking-widest text-[#C4BCFF]">
-        {added.length ? "What changed since your last session" : "Your roadmap is ready"}
+    <div className="flex flex-col gap-2.5 rounded-[18px] bg-[#1E1B3A] p-[18px] text-white">
+      <p className="text-xs font-extrabold uppercase tracking-[.08em] text-[#C4BCFF]">
+        {added.length ? "What changed after your last session" : "Your roadmap is ready"}
       </p>
       {firstPublish && !added.length && <p className="text-sm">Your advisor or coach checked it. These are your first steps.</p>}
-      {(newPaths.length > 0 || steps.length > 0) && (
-        <ul className="grid gap-x-4 gap-y-1.5 text-sm sm:grid-cols-2">
+      {added.length > 0 && (
+        <ul className="grid gap-x-4 gap-y-2 text-[13px] sm:grid-cols-2">
           {newPaths.map((a) => (
             <li key={a} className="flex gap-2">
               <b className="w-3.5 shrink-0 text-lime">+</b>
@@ -433,22 +399,33 @@ function WhatChanged({ changes }: { changes: Change[] }) {
           {newPaths.length > 0 && (
             <li className="flex gap-2">
               <b className="w-3.5 shrink-0 text-[#7FD4F5]">↺</b>
-              Your other paths stay. Skills you have carry over.
+              Your pinned path stays. Skills you have carry over.
             </li>
           )}
         </ul>
       )}
-      <form action={markChangesSeen}>
-        <button className="rounded-full bg-[#C4BCFF] px-4 py-2 text-sm font-extrabold text-[#1E1B3A]">Got it</button>
-      </form>
+      <div className="flex flex-wrap items-center gap-2.5">
+        {newPath && (
+          <form action={setPin.bind(null, newPath.id, true)}>
+            <button className="rounded-full bg-[#C4BCFF] px-4 py-2 text-sm font-extrabold text-[#1E1B3A]">
+              {switches ? "Switch my pin to this path" : "Pin the new path"}
+            </button>
+          </form>
+        )}
+        <form action={markChangesSeen}>
+          <button className={newPath ? "rounded-full border border-white/40 px-4 py-2 text-sm font-bold text-white" : "rounded-full bg-[#C4BCFF] px-4 py-2 text-sm font-extrabold text-[#1E1B3A]"}>
+            {newPath ? "Keep exploring for now" : "Got it"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
 
-function forkCaption(paths: Path[], grew: boolean) {
-  if (grew) return "Your skills open more than one door.";
+function forkCaption(paths: Path[], grew: boolean, limit: number) {
+  if (grew) return "Your skills open more than one door. Switch anytime.";
   if (paths.length === 1) return "One path, with room to branch out later.";
-  if (paths.some((p) => p.status === "pinned")) return `${paths.length} paths. You pinned your favorite; the others stay open.`;
-  return `${paths.length} paths to explore. Pin one when it clicks.`;
+  const pinned = paths.filter((p) => p.status === "pinned").length;
+  if (pinned) return limit === 1 ? "You've pinned your focus. The others stay open, and you can switch anytime." : `${pinned} of ${limit} pins used. The others stay open.`;
+  return `${paths.length} paths to explore. Pin ${limit === 1 ? "one" : "up to two"} when it clicks.`;
 }
-

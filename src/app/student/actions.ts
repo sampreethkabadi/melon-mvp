@@ -4,6 +4,7 @@ import { randomInt } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
+import { appNowIso } from "@/lib/clock";
 import { getProgress, rewardProgress, type RewardRow } from "@/lib/progress";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -36,7 +37,7 @@ export async function setItemDone(itemId: string, done: boolean) {
   const id = Id.parse(itemId);
   const { error } = await supabase
     .from("roadmap_items")
-    .update({ status: done ? "done" : "active", completed_at: done ? new Date().toISOString() : null })
+    .update({ status: done ? "done" : "active", completed_at: done ? appNowIso() : null })
     .eq("id", id)
     .eq("student_id", profile.id);
   if (error) throw new Error("Couldn't save that. Try again.");
@@ -48,25 +49,31 @@ export async function setItemDone(itemId: string, done: boolean) {
 export async function markChangesSeen() {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  await supabase.from("roadmap_changes").update({ seen_at: new Date().toISOString() }).eq("student_id", profile.id).is("seen_at", null);
+  await supabase.from("roadmap_changes").update({ seen_at: appNowIso() }).eq("student_id", profile.id).is("seen_at", null);
   revalidatePath("/student/roadmap");
 }
 
-/** Pins one path. The path that was pinned before goes back to "exploring". */
-export async function pinPath(pathId: string) {
+/** Pins or unpins a path. The database applies the year's limit and pauses or brings back the path's steps. */
+export async function setPin(pathId: string, pinned: boolean) {
+  await requireRole(["student"]);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("set_pin", { p_path: Id.parse(pathId), p_pin: pinned });
+  if (error) throw new Error(error.message.includes("Unpin one first") ? error.message : "Couldn't change that pin. Try again.");
+  revalidatePath("/student", "layout");
+}
+
+/** A student says a highlight from their session is wrong. Their advisor or coach is told and fixes it. */
+export async function flagHighlight(insightId: string, form: FormData) {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  const id = Id.parse(pathId);
-  const { error: clearError } = await supabase
-    .from("roadmap_paths")
-    .update({ status: "exploring" })
-    .eq("student_id", profile.id)
-    .eq("status", "pinned")
-    .neq("id", id);
-  if (clearError) throw new Error("Couldn't pin that path. Try again.");
-  const { error } = await supabase.from("roadmap_paths").update({ status: "pinned" }).eq("id", id).eq("student_id", profile.id);
-  if (error) throw new Error("Couldn't pin that path. Try again.");
-  revalidatePath("/student/roadmap");
+  const { data: insight } = await supabase.from("insights").select("id, session_id").eq("id", Id.parse(insightId)).eq("student_id", profile.id).single();
+  if (!insight) throw new Error("That highlight isn't yours.");
+  const note = String(form.get("note") ?? "").trim().slice(0, 500) || null;
+  const { error } = await supabase
+    .from("insight_flags")
+    .insert({ school_id: profile.school_id, insight_id: insight.id, session_id: insight.session_id, student_id: profile.id, note });
+  if (error && !error.message.includes("duplicate")) throw new Error("Couldn't send that. Try again.");
+  revalidatePath("/student/sessions");
 }
 
 const ITEM_KIND: Record<string, string> = {
@@ -75,6 +82,7 @@ const ITEM_KIND: Record<string, string> = {
   event: "event",
   course: "course",
   coaching: "coaching",
+  club: "networking",
 };
 
 /** Puts a library resource straight onto the student's roadmap, under the path it fits best. */
@@ -83,17 +91,17 @@ export async function addResource(resourceId: string) {
   const supabase = await createClient();
   const id = Id.parse(resourceId);
   const [{ data: resource }, { data: roadmap }, { data: paths }, { data: existing }] = await Promise.all([
-    supabase.from("resources").select("id, type, title, provider, url, interests").eq("id", id).single(),
+    supabase.from("resources").select("id, type, title, provider, url, interests, starts_at, blurb").eq("id", id).single(),
     supabase.from("roadmaps").select("id, status").eq("student_id", profile.id).maybeSingle(),
-    supabase.from("roadmap_paths").select("id, interest, status").eq("student_id", profile.id).neq("status", "dropped"),
+    supabase.from("roadmap_paths").select("id, interest, status").eq("student_id", profile.id).eq("status", "pinned"),
     supabase.from("roadmap_items").select("id").eq("student_id", profile.id).eq("resource_id", id).limit(1),
   ]);
   if (!resource) throw new Error("That resource isn't available.");
   if (roadmap?.status !== "published") throw new Error("Your roadmap isn't ready yet. Your advisor or coach checks it first.");
   if (existing?.length) return;
 
-  const fits = (paths ?? []).filter((p) => p.interest && (resource.interests as string[]).includes(p.interest));
-  const path = fits.find((p) => p.status === "pinned") ?? fits[0];
+  // It goes under the pinned path it's for. Things for everyone (the fair, a resume review) sit under no path.
+  const path = (paths ?? []).find((p) => p.interest && (resource.interests as string[]).includes(p.interest));
   const { data: term } = await supabase.rpc("current_term");
   const { error } = await supabase.from("roadmap_items").insert({
     school_id: profile.school_id,
@@ -103,11 +111,13 @@ export async function addResource(resourceId: string) {
     term: (term as string | null) ?? null,
     kind: ITEM_KIND[resource.type] ?? "skill",
     title: resource.title,
-    description: [resource.provider, resource.url].filter(Boolean).join(" · ") || null,
+    description: resource.blurb ?? resource.provider ?? null,
     source: "student",
     approval: "not_needed",
     resource_id: resource.id,
     sort: 900,
+    due_date: resource.starts_at ? resource.starts_at.slice(0, 10) : null,
+    firm: Boolean(resource.starts_at),
   });
   if (error) throw new Error("Couldn't add that. Try again.");
   revalidatePath("/student", "layout");
@@ -173,6 +183,6 @@ export async function deleteMoment(momentId: string) {
 export async function markNotificationsRead() {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  await supabase.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", profile.id).is("read_at", null);
+  await supabase.from("notifications").update({ read_at: appNowIso() }).eq("user_id", profile.id).is("read_at", null);
   revalidatePath("/student", "layout");
 }

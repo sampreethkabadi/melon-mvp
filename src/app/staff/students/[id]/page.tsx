@@ -21,9 +21,10 @@ const SESSION_STATUS: Record<string, string> = {
   reviewed: "Reviewed",
   failed: "Failed",
 };
+const ITEM_STATUS: Record<string, string> = { done: "Done", queued: "Waiting for a free slot", locked: "Saved for later", paused: "Paused (path unpinned)" };
 const ADVICE_STATUS: Record<string, string> = { new: "Not started", in_progress: "In progress", done: "Done", dismissed: "Dismissed" };
 
-type Item = { id: string; title: string; description: string | null; rationale: string | null; term: string | null; kind: string; status: string; approval: string; path_id: string | null };
+type Item = { id: string; title: string; description: string | null; rationale: string | null; term: string | null; kind: string; status: string; approval: string; path_id: string | null; due_date: string | null; firm: boolean };
 
 export default async function StudentPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ appointment?: string }> }) {
   const { id } = await params;
@@ -40,18 +41,19 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   if (!person) notFound();
   const sp = person.student_profiles as unknown as { class_year: ClassYear | null; program: string | null; majors: string[]; minors: string[]; expected_grad_term: string | null; target_roles: string[]; clubs: string[]; answers: { skills?: string[] }; resume_path: string | null; onboarding_step: string } | null;
 
-  const [{ data: roadmap }, { data: pathRows }, { data: itemRows }, { data: sessions }, { data: adviceRows }, { data: events }, { data: mineRow }] = await Promise.all([
+  const [{ data: roadmap }, { data: pathRows }, { data: changeRows }, { data: itemRows }, { data: sessions }, { data: adviceRows }, { data: events }, { data: mineRow }] = await Promise.all([
     supabase.from("roadmaps").select("id, status, version").eq("student_id", id).maybeSingle(),
     supabase.from("roadmap_paths").select("id, name, reason, first_job, status").eq("student_id", id).order("sort"),
-    supabase.from("roadmap_items").select("id, title, description, rationale, term, kind, status, approval, path_id").eq("student_id", id).order("sort"),
-    supabase.from("sessions").select("id, status, created_at, staff:profiles!sessions_staff_id_fkey(full_name), insights(kind, status, payload)").eq("student_id", id).order("created_at", { ascending: false }),
+    supabase.from("roadmap_changes").select("summary, created_at").eq("student_id", id).order("created_at", { ascending: false }).limit(1),
+    supabase.from("roadmap_items").select("id, title, description, rationale, term, kind, status, approval, path_id, due_date, firm").eq("student_id", id).order("sort"),
+    supabase.from("sessions").select("id, status, created_at, session_type, staff:profiles!sessions_staff_id_fkey(full_name), insights(kind, status, payload)").eq("student_id", id).order("created_at", { ascending: false }),
     supabase.from("advice_items").select("id, text, status, created_at, given_by_person:profiles!advice_items_given_by_fkey(full_name)").eq("student_id", id).order("created_at", { ascending: false }),
     supabase.from("profile_events").select("id, type, payload, source, occurred_at").eq("student_id", id).order("occurred_at", { ascending: false }).limit(25),
     supabase.from("staff_assignments").select("id").eq("student_id", id).eq("staff_id", profile.id).eq("active", true).maybeSingle(),
   ]);
 
   const items = (itemRows ?? []) as Item[];
-  const sessionList = (sessions ?? []) as unknown as Array<{ id: string; status: string; created_at: string; staff: { full_name: string } | null; insights: Array<{ kind: string; status: string; payload: { text: string } }> }>;
+  const sessionList = (sessions ?? []) as unknown as Array<{ id: string; status: string; created_at: string; session_type: string | null; staff: { full_name: string } | null; insights: Array<{ kind: string; status: string; payload: { text: string } }> }>;
   const advice = (adviceRows ?? []) as unknown as Array<{ id: string; text: string; status: string; given_by_person: { full_name: string } | null }>;
   const eventList = events ?? [];
   const lastReviewed = sessionList.find((s) => s.status === "reviewed");
@@ -78,6 +80,21 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   const isDraft = roadmap?.status === "draft";
   const paths = (pathRows ?? []).filter((p) => p.status !== "dropped");
   const looseItems = items.filter((i) => !i.path_id || !paths.some((p) => p.id === i.path_id));
+  const published = roadmap?.status === "published";
+  // The short version: coaches see career steps first, advisors see course steps first.
+  const courseFirst = profile.role !== "coach";
+  const isCourse = (i: Item) => i.kind === "course";
+  const open = items
+    .filter((i) => i.status === "active")
+    .sort((a, b) => Number(isCourse(b) === courseFirst) - Number(isCourse(a) === courseFirst) || Number(b.firm) - Number(a.firm) || (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+  const counts = {
+    open: open.length,
+    done: items.filter((i) => i.status === "done").length,
+    waiting: items.filter((i) => i.status === "queued").length,
+    saved: items.filter((i) => i.status === "locked").length,
+    paused: items.filter((i) => i.status === "paused").length,
+  };
+  const lastChange = ((changeRows ?? [])[0] as { summary: { added?: string[] }; created_at: string } | undefined) ?? null;
 
   return (
     <main className="mx-auto flex max-w-7xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -137,47 +154,85 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
               </form>
             )}
           </div>
-          {paths.map((path) => (
-            <div key={path.id} className="flex flex-col gap-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="font-extrabold">
-                  {path.name}
-                  {path.first_job && path.first_job !== path.name && <span className="font-normal text-muted"> · first job: {path.first_job}</span>}
-                </h3>
-                {canAct && isDraft && (
-                  <form action={dropPath.bind(null, id, path.id)}>
-                    <SubmitButton label="Remove path" variant="link" />
-                  </form>
-                )}
+          {published && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                {paths.map((p) => (
+                  <span key={p.id} className={`rounded-full px-2.5 py-1 text-xs font-bold ${p.status === "pinned" ? "bg-ink text-white" : "bg-soft text-ink-2"}`}>
+                    {p.status === "pinned" ? "Pinned: " : "Exploring: "}
+                    {p.name}
+                  </span>
+                ))}
               </div>
-              {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
-            </div>
-          ))}
-          {looseItems.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h3 className="font-extrabold">Whichever path you take</h3>
-              {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
+              <p className="text-sm text-muted">
+                {counts.open} open · {counts.done} done
+                {counts.waiting ? ` · ${counts.waiting} waiting for a free slot` : ""}
+                {counts.saved ? ` · ${counts.saved} saved for later` : ""}
+                {counts.paused ? ` · ${counts.paused} paused` : ""}
+              </p>
+              <ol className="flex flex-col gap-1.5">
+                {open.slice(0, 3).map((i) => (
+                  <li key={i.id} className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl border border-line px-3 py-2 text-sm">
+                    <b className="min-w-0">{i.title}</b>
+                    <span className="text-xs text-muted">
+                      {i.kind === "course" ? "Course" : i.kind}
+                      {i.due_date ? ` · ${i.firm ? "firm " : ""}${shortDate(i.due_date + "T12:00:00")}` : ""}
+                    </span>
+                  </li>
+                ))}
+                {!open.length && <li className="text-sm text-muted">No open steps.</li>}
+              </ol>
+              {lastChange?.summary.added?.length ? (
+                <p className="rounded-xl bg-soft px-3 py-2 text-sm text-ink-2">
+                  <b>Last change ({shortDate(lastChange.created_at)}):</b> {lastChange.summary.added.join("; ")}
+                </p>
+              ) : null}
             </div>
           )}
-          {canAct && roadmap && roadmap.status !== "none" && (
-            <form action={addItem.bind(null, id, roadmap.id)} className="flex flex-wrap items-end gap-2 rounded-2xl bg-soft p-3">
-              <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-semibold">
-                Add an item
-                <input name="title" required className="rounded-xl border border-line bg-white px-3 py-2 font-normal" />
-              </label>
-              <label className="flex flex-col gap-1 text-sm font-semibold">
-                Type
-                <select name="kind" defaultValue="coaching" className="rounded-xl border border-line bg-white px-2 py-2 font-normal">
-                  {ROADMAP_KINDS.map((k) => (
-                    <option key={k} value={k}>
-                      {k}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <SubmitButton label="Add" variant="secondary" />
-            </form>
-          )}
+          <MaybeCollapsed collapsed={published}>
+          {paths.map((path) => (
+              <div key={path.id} className="flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <h3 className="font-extrabold">
+                    {path.name}
+                    {path.first_job && path.first_job !== path.name && <span className="font-normal text-muted"> · first job: {path.first_job}</span>}
+                  </h3>
+                  {canAct && isDraft && (
+                    <form action={dropPath.bind(null, id, path.id)}>
+                      <SubmitButton label="Remove path" variant="link" />
+                    </form>
+                  )}
+                </div>
+                {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
+              </div>
+            ))}
+            {looseItems.length > 0 && (
+              <div className="flex flex-col gap-2">
+                <h3 className="font-extrabold">Whichever path you take</h3>
+                {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
+              </div>
+            )}
+            {canAct && roadmap && roadmap.status !== "none" && (
+              <form action={addItem.bind(null, id, roadmap.id)} className="flex flex-wrap items-end gap-2 rounded-2xl bg-soft p-3">
+                <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-semibold">
+                  Add an item
+                  <input name="title" required className="rounded-xl border border-line bg-white px-3 py-2 font-normal" />
+                </label>
+                <label className="flex flex-col gap-1 text-sm font-semibold">
+                  Type
+                  <select name="kind" defaultValue="coaching" className="rounded-xl border border-line bg-white px-2 py-2 font-normal">
+                    {ROADMAP_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <SubmitButton label="Add" variant="secondary" />
+              </form>
+            )}
+  
+          </MaybeCollapsed>
         </section>
 
         <div className="flex flex-col gap-4">
@@ -189,7 +244,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
                 <li key={s.id}>
                   <Link href={`/staff/sessions/${s.id}`} className="flex items-center justify-between gap-2 rounded-xl border border-line px-3 py-2 hover:border-ink">
                     <span className="text-sm font-semibold">
-                      {shortDate(s.created_at)} · {s.staff?.full_name}
+                      {shortDate(s.created_at)} · {s.session_type ?? "Session"} · {s.staff?.full_name}
                     </span>
                     <span className="text-xs text-muted">{SESSION_STATUS[s.status] ?? s.status}</span>
                   </Link>
@@ -248,7 +303,7 @@ function ItemRow({ studentId, item, editable }: { studentId: string; item: Item;
           <p className={`font-semibold ${rejected ? "text-muted line-through" : ""}`}>{item.title}</p>
           <p className="text-sm text-muted">
             {item.term} · {item.kind}
-            {item.status === "done" ? " · Done" : ""}
+            {ITEM_STATUS[item.status] ? ` · ${ITEM_STATUS[item.status]}` : ""}
           </p>
           {item.rationale && !rejected && <p className="mt-1 text-sm text-ink-2">Why: {item.rationale}</p>}
         </div>
@@ -269,6 +324,17 @@ function ItemRow({ studentId, item, editable }: { studentId: string; item: Item;
         </details>
       )}
     </div>
+  );
+}
+
+/** Published roadmaps fold away behind one click; a draft stays open because it needs checking. */
+function MaybeCollapsed({ collapsed, children }: { collapsed: boolean; children: React.ReactNode }) {
+  if (!collapsed) return <div className="flex flex-col gap-4">{children}</div>;
+  return (
+    <details className="rounded-2xl border border-line p-3">
+      <summary className="cursor-pointer text-sm font-bold text-link">See the full roadmap</summary>
+      <div className="mt-3 flex flex-col gap-4">{children}</div>
+    </details>
   );
 }
 
@@ -296,6 +362,7 @@ const EVENT_LABEL: Record<string, string> = {
   session_skill: "Skill",
   session_interest: "Interest",
   session_concern: "Concern",
+  session_advice: "Key advice",
 };
 function eventLabel(type: string, payload: { text?: string }) {
   const label = EVENT_LABEL[type] ?? type;
