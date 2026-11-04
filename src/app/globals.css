@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* Melon design tokens. The school color is set per school at runtime as --school. */
+@theme {
+  --color-ink: #14211b;
+  --color-ink-2: #3a4640;
+  --color-muted: #5b6660;
+  --color-line: #e3e6e4;
+  --color-ground: #f6f7f5;
+  --color-soft: #eef1ef;
+  --color-done: #2f8f5b;
+  --color-done-bg: #e3f4ea;
+  --color-done-ink: #1f5e3b;
+  --color-firm: #b42318;
+  --color-firm-bg: #fee4e2;
+  --color-warn-bg: #fff3d6;
+  --color-warn-ink: #6b4e00;
+  --color-link: #1d5f8a;
+  --color-new: #8b7cf6;
+  --color-new-bg: #edeaff;
+  --color-new-ink: #4b3bb3;
+  --color-lime: #c8f169;
+  --color-rind: #1e5b3a;
+  --color-melon: #f25c66;
+  --color-blush: #fff4f2;
+
+  --font-sans: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-brand: "Outfit", "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --school: #990000;
+  --c1: #5ab8e6;
+  --c2: #7bd389;
+}
+
+html {
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  text-wrap: balance;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-link);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Soft drifting background colors, set from the student's career interests. */
+.backdrop-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  opacity: 0.4;
+  transition: background-color 1.2s ease;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(60px, -40px) scale(1.12); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .backdrop-blob { animation: none; transition: none; }
+}
