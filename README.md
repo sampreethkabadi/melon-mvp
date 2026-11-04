@@ -20,7 +20,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql) and [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql) and [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -65,7 +65,7 @@ Use two browser windows, or one normal and one private: Lee in one, Maya in the 
 2. **Lee, Today:** open Maya's briefing, then **Start session** and **I agree to record**.
 3. **Maya, Home:** **I agree**. Lee's screen updates on its own.
 4. **Lee:** **Use the sample conversation**, **Or paste a sample transcript** (start each turn with the speaker, like `Advisor: Hello`), or record if `DEEPGRAM_API_KEY` is set. Check the suggestions against the transcript, accept, edit or reject each one, then **Finish review and update roadmap**.
-5. **Maya, Roadmap:** the accepted actions are there. Mark one done, and it shows as done in Lee's advice tracker.
+5. **Maya, Roadmap:** the Branch Tree shows a new **Cybersecurity** branch from the session (the sample conversation mentions it), a "What changed" card, and the accepted actions in this semester's next steps. Her background colors change to match. Mark one done, and it shows as done in Lee's advice tracker.
 6. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, so there's no cold start.
 
 With no API keys, this all still works. The screens say when a conversation is a sample and when suggestions were saved in advance or drafted by rules. If Claude is unavailable, the session falls back the same way.
@@ -116,7 +116,9 @@ psql -f supabase/tests/00_supabase_stub.sql
 psql -f supabase/migrations/0001_init.sql
 psql -f supabase/migrations/0002_roadmap_drafts.sql
 psql -f supabase/migrations/0003_sessions_and_assignment.sql
+psql -f supabase/migrations/0004_branch_tree.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
+psql -f supabase/tests/40_branch_tree.sql
 ```

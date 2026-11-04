@@ -4,7 +4,7 @@ import type { ClassYear } from "../types";
 // The first roadmap draft, built from templates plus the student's own answers. No AI yet: this is the
 // team's agreed fallback, and an advisor reviews and edits every draft before the student can see it.
 
-export type DraftPath = { name: string; reason: string; first_job: string; sort: number };
+export type DraftPath = { name: string; reason: string; first_job: string; sort: number; interest?: string };
 export type DraftItem = {
   path_index?: number;
   term: string;
@@ -190,6 +190,7 @@ function buildPaths(input: DraftInput, interests: string[]): { paths: DraftPath[
       reason: interests.includes(id) ? "You said you're interested in this." : "A broad option to explore while you work out what you like.",
       first_job: CAREERS[id].first_job,
       sort,
+      interest: id,
     })),
     pathInterests: chosen,
   };
