@@ -48,3 +48,20 @@ export async function markChangesSeen() {
   await supabase.from("roadmap_changes").update({ seen_at: new Date().toISOString() }).eq("student_id", profile.id).is("seen_at", null);
   revalidatePath("/student/roadmap");
 }
+
+/** Pins one path. The path that was pinned before goes back to "exploring". */
+export async function pinPath(pathId: string) {
+  const profile = await requireRole(["student"]);
+  const supabase = await createClient();
+  const id = Id.parse(pathId);
+  const { error: clearError } = await supabase
+    .from("roadmap_paths")
+    .update({ status: "exploring" })
+    .eq("student_id", profile.id)
+    .eq("status", "pinned")
+    .neq("id", id);
+  if (clearError) throw new Error("Couldn't pin that path. Try again.");
+  const { error } = await supabase.from("roadmap_paths").update({ status: "pinned" }).eq("id", id).eq("student_id", profile.id);
+  if (error) throw new Error("Couldn't pin that path. Try again.");
+  revalidatePath("/student/roadmap");
+}

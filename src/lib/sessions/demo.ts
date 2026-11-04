@@ -5,8 +5,9 @@ import type { DraftInsight, Segment } from "./types";
 
 type Line = ["staff" | "student", string];
 
-export function sampleConversation(student: { first: string; major: string; focus: string }): { segments: Segment[]; insights: DraftInsight[] } {
+export function sampleConversation(student: { first: string; major: string; focus: string; explore?: string }): { segments: Segment[]; insights: DraftInsight[] } {
   const { first, major, focus } = student;
+  const explore = student.explore ?? "cybersecurity";
   const lines: Line[] = [
     ["staff", `Thanks for coming in, ${first}. What's on your mind this week?`],
     ["student", `I've been thinking about my plans after ${major}. I'm most interested in ${focus}, but I don't know if I'm doing enough.`],
@@ -23,6 +24,8 @@ export function sampleConversation(student: { first: string; major: string; focu
     ["staff", "I'd add a statistics or methods course in spring. It'll help you with the kind of work you're describing."],
     ["student", "That makes sense. I've also been teaching myself SQL, and I'm getting pretty comfortable with it."],
     ["staff", "Great, add that to your resume too. Let's check in again after the career fair."],
+    ["student", `One more thing. At an info session I met a ${explore} team, and I'd like to explore ${explore} too, without dropping ${focus}.`],
+    ["staff", `You don't have to drop anything. Let's add ${explore} as a second path, and start with one free beginner ${explore} resource from the library this month.`],
   ];
   const segments: Segment[] = lines.map(([speaker, text], idx) => ({ idx, start_ms: idx * 12000, end_ms: (idx + 1) * 12000, speaker, text }));
   const insights: DraftInsight[] = [
@@ -34,6 +37,8 @@ export function sampleConversation(student: { first: string; major: string; focu
     { kind: "course_change", text: "Add a statistics or methods course in spring", evidence: [12, 13] },
     { kind: "skill", text: "SQL (self-taught, getting comfortable)", evidence: [13] },
     { kind: "concern", text: "Nervous about talking to recruiters", evidence: [9] },
+    { kind: "interest", text: `Wants to explore ${explore} as a second path`, evidence: [15, 16] },
+    { kind: "action", text: `Try one free beginner ${explore} resource from the library this month`, roadmap_kind: "skill", evidence: [16] },
   ];
   return { segments, insights };
 }
