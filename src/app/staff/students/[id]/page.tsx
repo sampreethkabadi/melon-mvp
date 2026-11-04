@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
-import { requireRole } from "@/lib/auth";
+import { firstName, requireRole } from "@/lib/auth";
 import { buildBriefing } from "@/lib/sessions/briefing";
 import { ROADMAP_KINDS } from "@/lib/sessions/types";
 import { createClient } from "@/lib/supabase/server";
 import { YEAR_LABEL, type ClassYear } from "@/lib/types";
 import { startSession } from "../../sessions/actions";
-import { addItem, dropPath, editItem, publishRoadmap, setItemApproval } from "../actions";
+import { addItem, approveRoadmap, dropPath, editItem, setItemApproval } from "../actions";
 
 export const metadata = { title: "Student · Melon" };
 
@@ -145,12 +145,12 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
             <div>
               <h2 className="text-lg font-extrabold">Roadmap</h2>
               <p className="text-sm text-muted">
-                {isDraft ? "Draft. The student can't see this until you publish it." : roadmap?.status === "published" ? "Published. The student can see this." : "The student hasn't finished onboarding yet."}
+                {roadmapNote(roadmap?.status, firstName(person.full_name))}
               </p>
             </div>
             {canAct && isDraft && (
-              <form action={publishRoadmap.bind(null, id)}>
-                <SubmitButton label="Approve and publish" />
+              <form action={approveRoadmap.bind(null, id)}>
+                <SubmitButton label="Approve and send to student" />
               </form>
             )}
           </div>
@@ -203,13 +203,13 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
                     </form>
                   )}
                 </div>
-                {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
+                {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} />)}
               </div>
             ))}
             {looseItems.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h3 className="font-extrabold">Whichever path you take</h3>
-                {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} />)}
+                {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} />)}
               </div>
             )}
             {canAct && roadmap && roadmap.status !== "none" && (
@@ -294,7 +294,7 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   );
 }
 
-function ItemRow({ studentId, item, editable }: { studentId: string; item: Item; editable: boolean }) {
+function ItemRow({ studentId, item, editable, locked }: { studentId: string; item: Item; editable: boolean; locked: boolean }) {
   const rejected = item.approval === "rejected";
   return (
     <div className={`rounded-2xl border border-line p-3 ${rejected ? "bg-soft" : "bg-white"}`}>
@@ -307,7 +307,7 @@ function ItemRow({ studentId, item, editable }: { studentId: string; item: Item;
           </p>
           {item.rationale && !rejected && <p className="mt-1 text-sm text-ink-2">Why: {item.rationale}</p>}
         </div>
-        {editable && item.approval !== "approved" && (
+        {editable && (item.approval !== "approved" || !locked) && (
           <form action={setItemApproval.bind(null, studentId, item.id, rejected ? "pending" : "rejected")}>
             <SubmitButton label={rejected ? "Restore" : "Remove"} variant="link" />
           </form>
@@ -356,6 +356,8 @@ const EVENT_LABEL: Record<string, string> = {
   questions_answered: "Answered the year questions",
   roadmap_drafted: "First roadmap drafted",
   roadmap_published: "Roadmap published",
+  roadmap_approved: "Roadmap approved and sent to the student",
+  roadmap_accepted: "Student accepted the roadmap",
   session_goal: "Goal",
   session_action: "Action",
   session_course_change: "Course change",
@@ -367,4 +369,11 @@ const EVENT_LABEL: Record<string, string> = {
 function eventLabel(type: string, payload: { text?: string }) {
   const label = EVENT_LABEL[type] ?? type;
   return payload.text ? `${label}: ${payload.text}` : label;
+}
+
+function roadmapNote(status: string | undefined, name: string) {
+  if (status === "draft") return `Draft. ${name} can't see this until you approve it.`;
+  if (status === "awaiting_student") return `Approved. Waiting for ${name} to accept it.`;
+  if (status === "published") return `Accepted by you both. This is ${name}'s roadmap.`;
+  return `${name} hasn't finished onboarding yet.`;
 }

@@ -14,6 +14,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 4 | Staff: Today, briefing, consent, capture, transcript, review, roadmap publishing and updates | ✅ |
 | 3 (rest) | Student app: home, action items, sessions, rewards, resources, notifications | ✅ |
 | 3b | Feedback round: fewer steps, one-click approval, pins by year, session types, highlights and flags, demo date | ✅ |
+| 3c | Both sides accept the roadmap, concerns stay with staff, sign-in by emailed code | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -22,7 +23,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -62,7 +63,18 @@ Open `https://YOUR-VERCEL-LINK/api/dev/seed?secret=YOUR_SEED_SECRET` in a browse
 
 Sign in to test accounts with **Have a test account? Use a password** and your `SEED_PASSWORD`.
 
+### 4. Email: let people sign in with their school address
+
+Supabase's built-in sender is limited to a few emails an hour and is only meant for trying things out, so connect your own.
+
+1. Create an account with an email service and get its SMTP details.
+2. In Supabase, open **Authentication > Emails > SMTP Settings**, turn on custom SMTP, and enter them.
+3. In **Authentication > Emails > Templates**, paste [`supabase/email-templates/sign-in-code.html`](supabase/email-templates/sign-in-code.html) into both **Magic Link** and **Confirm signup**. School mail filters can use up emailed links, so students type the code instead.
+4. In **Authentication > Rate Limits**, raise the emails-per-hour limit to fit your testing.
+
 ## Demo walkthrough
+
+A roadmap is final only when both sides agree. The advisor or coach clicks **Approve and send to student**, then the student reads it and clicks **Accept my roadmap**. Finishing a session doesn't publish a draft: its steps wait in the draft.
 
 Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
@@ -86,7 +98,9 @@ New sign-ups go to the advisor with the fewest active students, picked at random
 Enforced in the database, not just the app (see the migration):
 
 - Students see only their own data.
-- Students can't see a roadmap until it's published, and can't approve their own items. Their advisor or coach sees the draft first.
+- Students can't see a roadmap until their advisor or coach approves it, and it's final only once the student accepts. Students can't approve anything themselves.
+- Concerns are staff-only. Students can't read them on screen or through the API.
+- On advice, change logs and notifications, students can change only the status or read marker. Reward codes are written by the server.
 - Advisors and coaches see only students assigned to them. Private session notes are visible to their author only.
 - Admins see their own school.
 - Recording consent can't be edited or deleted, and only the person themself can give it. Both people must agree before audio is stored.
@@ -129,10 +143,12 @@ psql -f supabase/migrations/0003_sessions_and_assignment.sql
 psql -f supabase/migrations/0004_branch_tree.sql
 psql -f supabase/migrations/0005_student_tabs.sql
 psql -f supabase/migrations/0006_focus_and_pins.sql
+psql -f supabase/migrations/0007_accept_and_privacy.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
 psql -f supabase/tests/40_branch_tree.sql
 psql -f supabase/tests/50_student_tabs.sql
 psql -f supabase/tests/60_focus_and_pins.sql
+psql -f supabase/tests/70_accept_and_privacy.sql
 ```

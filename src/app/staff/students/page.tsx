@@ -7,7 +7,7 @@ export const metadata = { title: "Students · Melon" };
 
 type Row = { student: { id: string; full_name: string; student_profiles: { class_year: ClassYear | null; majors: string[]; onboarding_step: string } | null; roadmaps: { status: string } | null } | null };
 
-const ROADMAP = (status?: string) => (status === "draft" ? "Draft to review" : status === "published" ? "Roadmap published" : "No roadmap yet");
+const ROADMAP = (status?: string) => (status === "draft" ? "Draft to review" : status === "awaiting_student" ? "Waiting for student to accept" : status === "published" ? "Roadmap published" : "No roadmap yet");
 
 export default async function StudentsPage() {
   const profile = await requireRole(["advisor", "coach", "admin"]);

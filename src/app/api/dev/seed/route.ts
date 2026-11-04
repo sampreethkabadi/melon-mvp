@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
     if (error) return fail(`reset ${table}: ${error.message}`);
   }
   await db.from("notifications").delete().in("user_id", Object.values(ids));
-  await db.from("roadmaps").update({ status: "none", version: 0, published_at: null, published_by: null }).in("student_id", studentIds);
+  await db.from("roadmaps").update({ status: "none", version: 0, published_at: null, published_by: null, approved_at: null, approved_by: null, accepted_at: null }).in("student_id", studentIds);
   log.push("Test students reset");
 
   // Student details
@@ -187,7 +187,7 @@ export async function GET(request: NextRequest) {
   if (inErr) return fail(`integrations: ${inErr.message}`);
   log.push(`${library.length} resources, ${ALUMNI.length} alumni, ${SEED_REWARDS.length} rewards, ${SEED_INTEGRATIONS.length} integrations`);
 
-  // Demo history. Priya has a draft waiting for review. Maya has a published roadmap and one reviewed session,
+  // Demo history. Priya has a draft waiting for review. Maya has an accepted roadmap and reviewed sessions,
   // which is what makes her briefing worth reading when she moves to a new advisor.
   const { data: libraryRows } = await db.from("resources").select("id, type, title, interests").eq("school_id", schoolId).order("title");
   for (const [email, done] of Object.entries(SEED_DONE_ANSWERS)) {
@@ -202,6 +202,14 @@ export async function GET(request: NextRequest) {
   const history = await seedMayaHistory(db, schoolId, maya, coach, today);
   if (history) return fail(`Maya's history: ${history}`);
   await db.from("roadmap_changes").update({ seen_at: appNow().toISOString() }).eq("student_id", maya);
+  // Maya and her team signed off before her first session, so her timeline reads in order.
+  const { data: firstSession } = await db.from("sessions").select("created_at").eq("student_id", maya).order("created_at").limit(1).maybeSingle();
+  const signedOff = firstSession?.created_at ?? appNow().toISOString();
+  const { error: signErr } = await db
+    .from("roadmaps")
+    .update({ published_at: signedOff, approved_at: signedOff, approved_by: lee, accepted_at: signedOff })
+    .eq("student_id", maya);
+  if (signErr) return fail(`sign-off: ${signErr.message}`);
   log.push("Demo history ready");
 
   return NextResponse.json({

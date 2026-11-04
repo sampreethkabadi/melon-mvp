@@ -101,9 +101,9 @@ export default async function StudentHome() {
           ) : (
             <>
               <p className="text-ink-2">{roadmapMessage(roadmap?.status, staff.length > 0)}</p>
-              {published && (
+              {(published || roadmap?.status === "awaiting_student") && (
                 <Link href="/student/roadmap" className="mt-2 self-start rounded-full bg-ink px-5 py-2.5 font-extrabold text-white">
-                  Open my roadmap
+                  {published ? "Open my roadmap" : "Review and accept"}
                 </Link>
               )}
             </>
@@ -297,9 +297,10 @@ function Tile({ area, bg, fg, label, children }: { area: string; bg: string; fg:
 
 function roadmapMessage(status: string | undefined, hasTeam: boolean) {
   if (status === "published") return "Everything on your roadmap is done for now. Your next session will add more.";
+  if (status === "awaiting_student") return "Your advisor or coach approved your roadmap. Read it over and accept it to make it yours.";
   if (status === "draft") {
     return hasTeam
-      ? "We've drafted your first roadmap from your answers. Your advisor or coach checks it first, and it appears here once they approve it."
+      ? "We've drafted your first roadmap from your answers. Your advisor or coach checks it first, then it comes to you to accept."
       : "We've drafted your first roadmap from your answers. It appears here once the career center assigns your advisor or coach and they approve it.";
   }
   return "Your advisor or coach will set up your roadmap with you.";

@@ -22,7 +22,7 @@ export default async function TasksPage() {
       <main className="relative mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8 sm:px-6">
         <Backdrop interests={interests} />
         <h1 className="text-3xl font-extrabold tracking-tight">Your action items</h1>
-        <p className="rounded-3xl border border-line bg-white/95 p-6 text-ink-2">Your steps show up here once your advisor or coach approves your first roadmap.</p>
+        <p className="rounded-3xl border border-line bg-white/95 p-6 text-ink-2">Your steps show up here once you and your advisor or coach have both accepted your roadmap.</p>
       </main>
     );
   }

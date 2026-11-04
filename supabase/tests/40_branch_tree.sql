@@ -36,8 +36,28 @@ set request.jwt.claim.sub = :'lee';
 select public.finish_session_review(:'sess');
 
 reset role;
-\echo '-- after: roadmap is published (expect published):'
+\echo '-- after: a session does not publish anything (expect draft):'
 select status from public.roadmaps where student_id = :'leo';
+
+set role authenticated;
+set request.jwt.claim.sub = :'leo';
+\echo '-- Leo still sees nothing, and can''t accept yet (expect 0, then an error):'
+select count(*) from public.roadmap_items;
+select public.accept_roadmap();
+
+set request.jwt.claim.sub = :'lee';
+\echo '-- Lee approves (expect success):'
+select public.approve_roadmap(:'leo');
+
+set request.jwt.claim.sub = :'leo';
+\echo '-- Leo can read it but not tick it yet (expect more than 0, then UPDATE 0):'
+select count(*) > 0 from public.roadmap_items;
+update public.roadmap_items set status = 'done';
+\echo '-- Leo accepts (expect success):'
+select public.accept_roadmap();
+reset role;
+\echo '-- now it is published (expect published|t):'
+select status, accepted_at is not null from public.roadmaps where student_id = :'leo';
 \echo '-- a new Cybersecurity branch, made by this session; data was already an interest, so no duplicate (expect Data & analytics|data|f, Cybersecurity|cyber|t):'
 select name, interest, created_from_session is not null as from_session from public.roadmap_paths
  where student_id = :'leo' order by sort;

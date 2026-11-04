@@ -45,9 +45,9 @@ set role authenticated;
 select set_config('request.jwt.claim.sub', :'maya', false) is null;
 \echo '-- Maya reads unreviewed suggestions (expect 0):'
 select count(*) from public.insights;
-\echo '-- Maya publishes or finishes a review (expect 2 errors):'
+\echo '-- Maya approves her own roadmap or finishes a review (expect 2 errors):'
 select public.finish_session_review(:'sess');
-select public.publish_roadmap(:'maya');
+select public.approve_roadmap(:'maya');
 
 select set_config('request.jwt.claim.sub', :'lee', false) is null;
 \echo '-- Lee finishes with suggestions left (expect error):'

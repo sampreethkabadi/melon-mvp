@@ -30,6 +30,15 @@ export async function answerConsent(sessionId: string, granted: boolean) {
   revalidatePath("/student", "layout");
 }
 
+/** The student's half of the sign-off. This is what makes the roadmap final. */
+export async function acceptRoadmap() {
+  await requireRole(["student"]);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("accept_roadmap");
+  if (error) throw new Error("Couldn't accept your roadmap. Try again.");
+  revalidatePath("/student", "layout");
+}
+
 /** Ticks an item on or off. Anything the item came from in the advice tracker moves with it. */
 export async function setItemDone(itemId: string, done: boolean) {
   const profile = await requireRole(["student"]);
