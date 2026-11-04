@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Backdrop } from "@/components/Backdrop";
 import { firstName, requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -13,6 +14,7 @@ type Appt = {
   type: string;
   modality: string;
   location: string | null;
+  student_id: string;
   student: { full_name: string } | null;
 };
 type Assigned = {
@@ -33,7 +35,7 @@ export default async function StaffToday() {
   const [{ data: appts }, { data: assigned }] = await Promise.all([
     supabase
       .from("appointments")
-      .select("id, starts_at, type, modality, location, student:profiles!appointments_student_id_fkey(full_name)")
+      .select("id, starts_at, type, modality, location, student_id, student:profiles!appointments_student_id_fkey(full_name)")
       .eq("staff_id", profile.id)
       .gte("starts_at", start.toISOString())
       .lt("starts_at", end.toISOString())
@@ -81,7 +83,9 @@ export default async function StaffToday() {
                       {a.location ? ` · ${a.location}` : ""}
                     </span>
                   </span>
-                  <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-ink-2">Briefing in step 4</span>
+                  <Link href={`/staff/students/${a.student_id}?appointment=${a.id}`} className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-ink-2 hover:bg-line">
+                    Open briefing
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -98,7 +102,9 @@ export default async function StaffToday() {
                 const sp = a.student!.student_profiles;
                 return (
                   <li key={a.student!.id} className="flex items-center justify-between gap-3 rounded-xl border border-line px-3 py-2">
-                    <b>{a.student!.full_name}</b>
+                    <Link href={`/staff/students/${a.student!.id}`} className="font-bold hover:underline">
+                      {a.student!.full_name}
+                    </Link>
                     <span className="text-right text-sm text-muted">
                       {[sp?.class_year ? YEAR_LABEL[sp.class_year as ClassYear] : null, sp?.majors?.[0]].filter(Boolean).join(" · ")}
                     </span>
