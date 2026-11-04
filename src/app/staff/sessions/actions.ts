@@ -6,6 +6,8 @@ import { z } from "zod";
 import { requireRole } from "@/lib/auth";
 import { sampleConversation } from "@/lib/sessions/demo";
 import { sampleForStudent } from "@/lib/sessions/sample-for-student";
+import { defaultType } from "@/lib/sessions/session-types";
+import { appNowIso } from "@/lib/clock";
 import { isSpeechConfigured, transcribeUrl } from "@/lib/sessions/deepgram";
 import { draftInsights, saveSegments } from "@/lib/sessions/pipeline";
 import { notesToSegments, parseTranscript } from "@/lib/sessions/rules";
@@ -21,7 +23,7 @@ async function ownSession(id: string) {
   const supabase = await createClient();
   const { data: session } = await supabase
     .from("sessions")
-    .select("id, school_id, student_id, staff_id, status, transcript_source, appointment_id")
+    .select("id, school_id, student_id, staff_id, status, transcript_source, appointment_id, session_type")
     .eq("id", Id.parse(id))
     .single();
   if (!session || session.staff_id !== profile.id) throw new Error("This isn't your session.");
@@ -33,6 +35,10 @@ const refresh = (id: string) => revalidatePath(`/staff/sessions/${id}`);
 export async function startSession(studentId: string, appointmentId: string | null) {
   const profile = await requireRole(["advisor", "coach"]);
   const supabase = await createClient();
+  // The student picked the session type when they booked.
+  const { data: appt } = appointmentId
+    ? await supabase.from("appointments").select("type").eq("id", Id.parse(appointmentId)).maybeSingle()
+    : { data: null };
   const { data, error } = await supabase
     .from("sessions")
     .insert({
@@ -40,6 +46,7 @@ export async function startSession(studentId: string, appointmentId: string | nu
       student_id: Id.parse(studentId),
       staff_id: profile.id,
       appointment_id: appointmentId ? Id.parse(appointmentId) : null,
+      session_type: appt?.type ?? defaultType(profile.role),
     })
     .select("id")
     .single();
@@ -94,7 +101,7 @@ export async function getUploadTarget(id: string): Promise<{ path: string; token
   const db = createAdminClient();
   const { data, error } = await db.storage.from("recordings").createSignedUploadUrl(path, { upsert: true });
   if (error || !data) throw new Error("Couldn't prepare the upload. Try again.");
-  await supabase.from("sessions").update({ status: "recording", started_at: new Date().toISOString() }).eq("id", session.id);
+  await supabase.from("sessions").update({ status: "recording", started_at: appNowIso() }).eq("id", session.id);
   return { path, token: data.token };
 }
 
@@ -118,12 +125,12 @@ export async function finishRecording(id: string, durationSeconds: number, sizeB
     await db.storage.from("recordings").remove([path]);
     throw new Error("Consent was withdrawn, so the audio was deleted.");
   }
-  await db.from("sessions").update({ status: "uploaded", ended_at: new Date().toISOString() }).eq("id", session.id);
+  await db.from("sessions").update({ status: "uploaded", ended_at: appNowIso() }).eq("id", session.id);
   await processAudio(session);
   refresh(id);
 }
 
-async function processAudio(session: { id: string; school_id: string; student_id: string; transcript_source: string | null }) {
+async function processAudio(session: { id: string; school_id: string; student_id: string; staff_id: string; session_type: string | null; transcript_source: string | null }) {
   const db = createAdminClient();
   try {
     if (!isSpeechConfigured()) throw new Error("Speech-to-text isn't set up.");
@@ -141,10 +148,10 @@ async function processAudio(session: { id: string; school_id: string; student_id
 
 /** Retries whatever step failed: transcribing if there's no transcript yet, otherwise the suggestions. */
 export async function retryProcessing(id: string) {
-  const { session, supabase } = await ownSession(id);
+  const { session, supabase, profile } = await ownSession(id);
   const { count } = await supabase.from("transcript_segments").select("id", { count: "exact", head: true }).eq("session_id", session.id);
   if (count) {
-    await draftInsights(session, session.transcript_source === "sample" ? await sampleForStudent(session.student_id) : undefined);
+    await draftInsights(session, session.transcript_source === "sample" ? await sampleForStudent(session.student_id, session.session_type ?? defaultType(profile.role)) : undefined);
   } else {
     await processAudio(session);
   }
@@ -153,10 +160,10 @@ export async function retryProcessing(id: string) {
 
 /** Uses the invented sample conversation. Consent still has to be in place, as it would for real audio. */
 export async function runSampleConversation(id: string) {
-  const { session, supabase } = await ownSession(id);
+  const { session, supabase, profile } = await ownSession(id);
   const { data: agreed } = await supabase.rpc("has_recording_consent", { sess: session.id });
   if (agreed !== true) throw new Error("Both people must agree first.");
-  const sample = await sampleForStudent(session.student_id);
+  const sample = await sampleForStudent(session.student_id, session.session_type ?? defaultType(profile.role));
   await saveSegments(session, sampleConversation(sample).segments, "sample");
   await draftInsights({ ...session, transcript_source: "sample" }, sample);
   refresh(id);
@@ -187,7 +194,7 @@ export async function reviewInsight(sessionId: string, insightId: string, decisi
   const { profile, supabase, session } = await ownSession(sessionId);
   const { error } = await supabase
     .from("insights")
-    .update({ status: decision, reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+    .update({ status: decision, reviewed_by: profile.id, reviewed_at: appNowIso() })
     .eq("id", Id.parse(insightId))
     .eq("session_id", session.id);
   if (error) throw new Error("Couldn't save that. Try again.");
@@ -201,7 +208,7 @@ export async function editInsight(sessionId: string, insightId: string, form: Fo
   const { data: current } = await supabase.from("insights").select("payload").eq("id", Id.parse(insightId)).single();
   const { error } = await supabase
     .from("insights")
-    .update({ status: "edited", payload: { ...(current?.payload ?? {}), text }, reviewed_by: profile.id, reviewed_at: new Date().toISOString() })
+    .update({ status: "edited", payload: { ...(current?.payload ?? {}), text }, reviewed_by: profile.id, reviewed_at: appNowIso() })
     .eq("id", insightId)
     .eq("session_id", session.id);
   if (error) throw new Error("Couldn't save your edit. Try again.");
@@ -224,4 +231,42 @@ export async function finishReview(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath(`/staff/students/${session.student_id}`);
   refresh(id);
+}
+
+/** One click: everything not removed is accepted, and the student's roadmap and highlights update. */
+export async function approveSession(id: string) {
+  const { supabase, session } = await ownSession(id);
+  const { error } = await supabase.rpc("approve_session", { p_session: session.id });
+  if (error) throw new Error(error.message);
+  revalidatePath(`/staff/students/${session.student_id}`);
+  refresh(id);
+}
+
+/** A student flagged a highlight: fix its wording, or remove it. Either way the flag is closed. */
+export async function resolveFlag(sessionId: string, flagId: string, form: FormData) {
+  const { profile, supabase, session } = await ownSession(sessionId);
+  const { data: flag } = await supabase.from("insight_flags").select("id, insight_id").eq("id", Id.parse(flagId)).eq("session_id", session.id).single();
+  if (!flag) throw new Error("That flag isn't on this session.");
+  const choice = z.enum(["fix", "remove", "keep"]).parse(form.get("choice"));
+  if (choice === "fix") {
+    const text = String(form.get("text") ?? "").trim().slice(0, 2000);
+    if (!text) throw new Error("A highlight can't be empty. Remove it instead.");
+    const { data: current } = await supabase.from("insights").select("payload").eq("id", flag.insight_id).single();
+    await supabase.from("insights").update({ status: "edited", payload: { ...(current?.payload ?? {}), text } }).eq("id", flag.insight_id);
+  } else if (choice === "remove") {
+    await supabase.from("insights").update({ status: "rejected" }).eq("id", flag.insight_id);
+  }
+  const { error } = await supabase
+    .from("insight_flags")
+    .update({ status: choice === "keep" ? "dismissed" : "fixed", resolved_by: profile.id, resolved_at: appNowIso() })
+    .eq("id", flag.id);
+  if (error) throw new Error("Couldn't save that. Try again.");
+  await createAdminClient().from("notifications").insert({
+    school_id: session.school_id,
+    user_id: session.student_id,
+    type: "flag_resolved",
+    title: choice === "keep" ? `${profile.full_name} looked at your flag and kept the highlight` : `${profile.full_name} fixed the highlight you flagged`,
+    link: "/student/sessions",
+  });
+  refresh(sessionId);
 }

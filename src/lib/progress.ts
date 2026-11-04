@@ -1,5 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { appNow } from "@/lib/clock";
 import { currentSemester, type Semester } from "@/lib/roadmap/semester";
 
 // Everything the Home dashboard and Rewards tab count. Numbers only come from things Melon tracked:
@@ -40,7 +41,7 @@ export type Progress = {
 type Activity = { kind: string; title: string; minutes: number; occurred_at: string };
 type DoneItem = { title: string; kind: string; completed_at: string | null };
 
-export async function getProgress(supabase: SupabaseClient, studentId: string, now = new Date()): Promise<Progress> {
+export async function getProgress(supabase: SupabaseClient, studentId: string, now = appNow()): Promise<Progress> {
   const sem = currentSemester(now);
   const lastStart = new Date(sem.start);
   lastStart.setMonth(lastStart.getMonth() - (sem.term.startsWith("Fall") ? 7 : 5));
@@ -86,7 +87,8 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
     ...((skillRows ?? []) as Array<{ payload: { text?: string } }>).map((s) => s.payload.text ?? ""),
     ...termDone.filter((d) => d.kind === "skill" || d.kind === "certification").map((d) => d.title),
   ]
-    .map((s) => s.replace(/\s*\(.*\)$/, "").trim())
+    .map((s) => s.replace(/\s*\(.*\)$/, "").replace(/^(try|finish|do|learn|start|complete|take)\s+(the\s+)?(free\s+)?/i, "").trim())
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
     .filter(Boolean)
     .filter((s, i, all) => all.indexOf(s) === i)
     .slice(0, 3);
@@ -96,8 +98,17 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
     ...((staffSessions ?? []) as Array<{ staff_id: string }>).map((s) => s.staff_id),
   ]).size;
 
-  const big = termDone.filter((d) => d.kind === "event").sort((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0] ??
-    termDone.sort((a, b) => b.completed_at!.localeCompare(a.completed_at!))[0];
+  // The biggest moment: an event you went to beats a step you ticked off.
+  const latest = <T,>(xs: T[], at: (x: T) => string) => [...xs].sort((a, b) => at(b).localeCompare(at(a)))[0];
+  const doneEvent = latest(termDone.filter((d) => d.kind === "event"), (d) => d.completed_at!);
+  const loggedEvent = latest(termActs.filter((a) => a.kind === "event"), (a) => a.occurred_at);
+  const big = doneEvent
+    ? { title: doneEvent.title, when: doneEvent.completed_at! }
+    : loggedEvent
+      ? { title: `You went to ${loggedEvent.title}`, when: loggedEvent.occurred_at }
+      : termDone.length
+        ? { title: latest(termDone, (d) => d.completed_at!).title, when: latest(termDone, (d) => d.completed_at!).completed_at! }
+        : null;
 
   return {
     sem,
@@ -110,7 +121,7 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
     weeks,
     skills,
     people,
-    moment: big ? { title: big.title, when: big.completed_at! } : null,
+    moment: big,
     doneThisTerm: termDone.length,
   };
 }
@@ -132,4 +143,13 @@ export function rewardProgress(reward: RewardRow, p: Progress): RewardStatus {
   const have = reward.rule.kind === "sessions" ? p.sessions : reward.rule.kind === "events" ? p.eventsThisTerm : p.streakWeeks;
   const need = Math.max(reward.rule.count, 1);
   return { ...reward, have: Math.min(have, need), need, unlocked: have >= need };
+}
+
+/** All active rewards with the student's progress, plus the one they're closest to unlocking. */
+export async function rewardsFor(supabase: SupabaseClient, studentId: string, progress?: Progress) {
+  const p = progress ?? (await getProgress(supabase, studentId));
+  const { data } = await supabase.from("rewards").select("id, name, description, rule, sort").eq("active", true).order("sort");
+  const all = ((data ?? []) as RewardRow[]).map((r) => rewardProgress(r, p));
+  const next = all.filter((r) => !r.unlocked).sort((a, b) => b.have / b.need - a.have / a.need)[0] ?? null;
+  return { progress: p, all, next };
 }

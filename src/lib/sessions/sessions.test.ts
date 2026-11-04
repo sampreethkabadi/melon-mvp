@@ -2,13 +2,31 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildBriefing, type BriefingInput } from "./briefing.ts";
 import { sampleConversation } from "./demo.ts";
+import { ADVISOR_SESSION_TYPES, COACH_SESSION_TYPES } from "./session-types.ts";
 import { analyzeByRules, notesToSegments, parseTranscript } from "./rules.ts";
 import { keepSupported } from "./types.ts";
 
-test("every saved sample suggestion points at a real line", () => {
-  const { segments, insights } = sampleConversation({ first: "Maya", major: "Data Science", focus: "data" });
-  assert.equal(keepSupported(insights, segments).length, insights.length);
-  assert.equal(insights.filter((i) => i.kind === "summary").length, 1);
+const CTX = {
+  first: "Maya", major: "Data Science", focus: "data & analytics", job: "data analyst", explore: "cybersecurity", year: "junior",
+  dates: { mockFair: "2026-09-14", fair1: "2026-09-17", resumeDropIn: "2026-09-09", networkingNight: "2026-10-06", springRegistration: "2026-10-26", minorForm: "2026-10-01", dropW: "2026-09-06" },
+};
+
+test("every session type has a short sample with one summary, at most 2 steps, and real evidence", () => {
+  for (const type of [...COACH_SESSION_TYPES, ...ADVISOR_SESSION_TYPES]) {
+    const { segments, insights } = sampleConversation({ ...CTX, type });
+    assert.ok(segments.length >= 3 && segments.length <= 16, type);
+    assert.equal(keepSupported(insights, segments).length, insights.length, type);
+    assert.equal(insights.filter((i) => i.kind === "summary").length, 1, type);
+    assert.ok(insights.filter((i) => i.kind === "action" || i.kind === "course_change").length <= 2, type);
+  }
+});
+
+test("advisor samples stick to courses and policy", () => {
+  for (const type of ADVISOR_SESSION_TYPES) {
+    const { insights } = sampleConversation({ ...CTX, type });
+    for (const i of insights.filter((x) => x.kind === "action")) assert.equal(i.roadmap_kind, "course", `${type}: ${i.text}`);
+    assert.ok(!insights.some((i) => i.kind === "interest"), type);
+  }
 });
 
 test("suggestions with no real evidence are dropped", () => {

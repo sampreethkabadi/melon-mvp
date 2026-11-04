@@ -1,11 +1,11 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analyzeWithClaude, CLAUDE_MODEL, isClaudeConfigured, PROMPT_VERSION } from "./claude";
-import { sampleConversation } from "./demo";
+import { sampleConversation, type SampleContext } from "./demo";
 import { analyzeByRules } from "./rules";
 import { keepSupported, type DraftInsight, type Segment } from "./types";
 
-type SessionRow = { id: string; school_id: string; student_id: string; transcript_source: string | null };
+type SessionRow = { id: string; school_id: string; student_id: string; staff_id: string; session_type: string | null; transcript_source: string | null };
 
 /** Replaces a session's transcript. Only the server writes transcripts. */
 export async function saveSegments(session: SessionRow, segments: Segment[], source: "audio" | "sample" | "notes") {
@@ -24,7 +24,7 @@ export async function saveSegments(session: SessionRow, segments: Segment[], sou
  * Drafts suggestions for the advisor. Claude runs only when it's set up and the student agreed to AI
  * analysis. Otherwise, or if Claude fails, samples use their saved suggestions and everything else uses rules.
  */
-export async function draftInsights(session: SessionRow, sampleFor?: { first: string; major: string; focus: string }) {
+export async function draftInsights(session: SessionRow, sampleFor?: SampleContext) {
   const db = createAdminClient();
   const { data: rows, error } = await db
     .from("transcript_segments")
@@ -42,11 +42,14 @@ export async function draftInsights(session: SessionRow, sampleFor?: { first: st
     .eq("scope", "ai_analysis")
     .eq("granted", true);
 
+  const { data: staff } = await db.from("profiles").select("role").eq("id", session.staff_id).single();
+  const role = staff?.role === "coach" ? "coach" : "advisor";
+
   let drafted: DraftInsight[] | null = null;
   let modelRef = "rules-v1";
   if (isClaudeConfigured() && (count ?? 0) > 0) {
     try {
-      drafted = await analyzeWithClaude(segments);
+      drafted = await analyzeWithClaude(segments, { role, type: session.session_type });
       modelRef = CLAUDE_MODEL;
     } catch (err) {
       console.error("Claude analysis failed, using the fallback:", err instanceof Error ? err.message : "unknown");
@@ -56,7 +59,7 @@ export async function draftInsights(session: SessionRow, sampleFor?: { first: st
     drafted = sampleConversation(sampleFor).insights;
     modelRef = "saved-sample-v1";
   }
-  const kept = keepSupported(drafted ?? analyzeByRules(segments), segments);
+  const kept = focusSteps(keepSupported(drafted ?? analyzeByRules(segments), segments), role);
 
   await db.from("insights").delete().eq("session_id", session.id);
   for (const insight of kept) {
@@ -67,7 +70,7 @@ export async function draftInsights(session: SessionRow, sampleFor?: { first: st
         session_id: session.id,
         student_id: session.student_id,
         kind: insight.kind,
-        payload: { text: insight.text, roadmap_kind: insight.roadmap_kind ?? null },
+        payload: { text: insight.text, roadmap_kind: insight.roadmap_kind ?? null, due_date: insight.due_date ?? null, firm: insight.firm ?? false },
         model_ref: modelRef,
         prompt_version: PROMPT_VERSION,
       })
@@ -80,4 +83,17 @@ export async function draftInsights(session: SessionRow, sampleFor?: { first: st
   }
   const { error: statusError } = await db.from("sessions").update({ status: "ready_for_review" }).eq("id", session.id);
   if (statusError) throw new Error(statusError.message);
+}
+
+/**
+ * At most 2 steps per session, so students aren't buried under to-dos on top of their coursework.
+ * Advisors cover courses and policy, so their steps are course steps only.
+ */
+export function focusSteps(insights: DraftInsight[], role: "advisor" | "coach"): DraftInsight[] {
+  let steps = 0;
+  return insights.filter((i) => {
+    if (i.kind !== "action" && i.kind !== "course_change") return true;
+    if (role === "advisor" && i.kind === "action" && i.roadmap_kind !== "course") return false;
+    return ++steps <= 2;
+  });
 }

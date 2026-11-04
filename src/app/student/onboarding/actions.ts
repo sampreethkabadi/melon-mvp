@@ -1,5 +1,6 @@
 "use server";
 
+import { appNow } from "@/lib/clock";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { requireRole } from "@/lib/auth";
@@ -197,7 +198,7 @@ async function draftRoadmap(supabase: Db, profile: Profile) {
     supabase.from("resources").select("id, type, title, interests").eq("school_id", profile.school_id).order("title"),
   ]);
   if (spError || resourceError || !sp?.class_year) throw new Error("Couldn't load your answers to build your roadmap.");
-  const { paths, items } = buildFirstRoadmap({ ...sp, resources: resources ?? [] });
+  const { paths, items } = buildFirstRoadmap({ ...sp, resources: resources ?? [], now: appNow() });
   // Students can't write roadmaps directly, and the draft function refuses to touch a published one.
   const { error } = await createAdminClient().rpc("replace_draft_roadmap", {
     p_student: profile.id,

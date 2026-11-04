@@ -49,16 +49,25 @@ export const SEED_STAFF = [
   { email: "admin@melon.test", full_name: "Morgan Hale", role: "admin" as const, title: "Career center admin" },
 ];
 
-/** Today's sessions as [student email, local time, type, modality, location]. Each goes to that student's advisor. */
-export const SEED_APPOINTMENTS: Array<[string, string, string, "in_person" | "teams" | "melon_call", string | null]> = [
-  ["leo@melon.test", "09:30", "First meeting", "in_person", "Room 204"],
-  ["priya@melon.test", "11:00", "Offer review", "teams", null],
-  ["maya@melon.test", "14:00", "Career check-in", "in_person", "Room 204"],
-  ["sam@melon.test", "15:30", "Resume review", "melon_call", null],
-  ["ava@melon.test", "10:00", "Career check-in", "in_person", "Room 110"],
-  ["omar@melon.test", "13:00", "Mock interview", "teams", null],
-  ["grace@melon.test", "11:30", "First meeting", "in_person", "Room 118"],
-  ["tyler@melon.test", "14:30", "Resume review", "melon_call", null],
+/**
+ * Sessions booked for the demo day as [student email, local time, session type, modality, location, with].
+ * Students pick the type when they book: career topics with the coach, courses and policy with their advisor.
+ */
+export const SEED_APPOINTMENTS: Array<[string, string, string, "in_person" | "teams" | "melon_call", string | null, "advisor" | "coach"]> = [
+  ["leo@melon.test", "09:30", "Course planning", "in_person", "Luddy Hall 2104", "advisor"],
+  ["maya@melon.test", "10:30", "Course planning", "in_person", "Luddy Hall 2104", "advisor"],
+  ["priya@melon.test", "13:00", "Degree progress check", "teams", null, "advisor"],
+  ["sam@melon.test", "15:00", "Academic policy question", "in_person", "Luddy Hall 2104", "advisor"],
+  ["ava@melon.test", "10:00", "Declare or change a major or minor", "in_person", "Room 110", "advisor"],
+  ["omar@melon.test", "13:30", "Degree progress check", "teams", null, "advisor"],
+  ["grace@melon.test", "11:30", "Course planning", "in_person", "Room 118", "advisor"],
+  ["tyler@melon.test", "14:30", "Course planning", "melon_call", null, "advisor"],
+  ["leo@melon.test", "12:00", "Drop-in", "in_person", "Career center", "coach"],
+  ["sam@melon.test", "11:00", "Mock technical interview", "melon_call", null, "coach"],
+  ["maya@melon.test", "14:00", "Career fair preparation", "in_person", "Career center, room 3", "coach"],
+  ["priya@melon.test", "15:30", "Mock behavioral interview", "teams", null, "coach"],
+  ["ava@melon.test", "09:00", "Resume, cover letter or portfolio review", "in_person", "Career center, room 3", "coach"],
+  ["omar@melon.test", "16:30", "Internship search", "teams", null, "coach"],
 ];
 
 /** Answers behind the demo roadmaps for the students who've already finished onboarding. */
@@ -74,26 +83,6 @@ export const SEED_COURSES = [
   ["MATH-M 301", "Linear Algebra", "Spring 2025", "completed"],
   ["INFO-I 308", "Databases", "Fall 2025", "completed"],
   ["CSCI-B 365", "Intro to Machine Learning", "Fall 2026", "in_progress"],
-] as const;
-
-export const SEED_RESOURCES = [
-  { type: "skill", title: "SQL window functions", provider: "Free tutorial", interests: ["data"], source: "library" },
-  { type: "skill", title: "Log analysis with Python", provider: "Open tutorial", interests: ["cyber", "data"], source: "melon" },
-  { type: "skill", title: "Kaggle Learn: Intro to Machine Learning", provider: "Kaggle · 7 lessons", interests: ["data"], source: "library" },
-  { type: "skill", title: "Telling a story with data", provider: "Library video · 12 min", interests: ["data", "biz"], source: "library" },
-  { type: "skill", title: "Build a tiny webpage in 1 hour", provider: "Free coding lesson", interests: ["soft", "unsure"], source: "library" },
-  { type: "certification", title: "Google Data Analytics", provider: "Coursera · student financial aid", interests: ["data"], source: "library" },
-  { type: "certification", title: "CompTIA Security+", provider: "Free study guide", interests: ["cyber"], source: "library" },
-  { type: "certification", title: "Bloomberg Market Concepts", provider: "Free on campus", interests: ["biz"], source: "library" },
-  { type: "event", title: "Fall Career Fair", provider: "On campus", interests: ["data", "soft", "biz", "cyber", "ux"], source: "handshake" },
-  { type: "event", title: "Cyber Club beginner CTF night", provider: "On campus", interests: ["cyber"], source: "handshake" },
-  { type: "event", title: "DS Club Industry Night", provider: "On campus", interests: ["data"], source: "handshake" },
-  { type: "event", title: "Majors & Minors Fair", provider: "On campus", interests: ["unsure"], source: "handshake" },
-  { type: "course", title: "Applied Machine Learning", provider: "Course catalog", interests: ["data"], source: "library" },
-  { type: "course", title: "Network Security Basics", provider: "Course catalog", interests: ["cyber"], source: "library" },
-  { type: "course", title: "Design Basics", provider: "Course catalog", interests: ["ux", "arts"], source: "library" },
-  { type: "coaching", title: "Mock technical interview", provider: "30 min · career center", interests: ["soft", "data", "cyber"], source: "handshake" },
-  { type: "coaching", title: "Resume drop-in hours", provider: "Tue + Thu, 1–4 pm", interests: [], source: "library" },
 ] as const;
 
 export const SEED_REWARDS = [

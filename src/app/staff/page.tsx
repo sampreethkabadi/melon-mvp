@@ -1,3 +1,4 @@
+import { appNow } from "@/lib/clock";
 import Link from "next/link";
 import { Backdrop } from "@/components/Backdrop";
 import { firstName, requireRole } from "@/lib/auth";
@@ -26,7 +27,7 @@ export default async function StaffToday() {
   const profile = await requireRole(["advisor", "coach", "admin"]);
   const supabase = await createClient();
 
-  const now = new Date();
+  const now = appNow();
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
   start.setTime(start.getTime() - 12 * 3600 * 1000);
