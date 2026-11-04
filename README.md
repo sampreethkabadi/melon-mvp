@@ -12,7 +12,8 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 2 | Student onboarding: resume autofill, profile, year questions, first roadmap draft (held for advisor approval) | ✅ |
 | 3 | Student roadmap page | ✅ |
 | 4 | Staff: Today, briefing, consent, capture, transcript, review, roadmap publishing and updates | ✅ |
-| 3 (rest) | Student app: home, action items, resources, rewards, notifications, settings | next |
+| 3 (rest) | Student app: home, action items, sessions, rewards, resources, notifications | ✅ |
+| 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
 ## One-time setup (about 20 minutes)
@@ -20,7 +21,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql) and [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql) [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql) and [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -66,7 +67,10 @@ Use two browser windows, or one normal and one private: Lee in one, Maya in the 
 3. **Maya, Home:** **I agree**. Lee's screen updates on its own.
 4. **Lee:** **Use the sample conversation**, **Or paste a sample transcript** (start each turn with the speaker, like `Advisor: Hello`), or record if `DEEPGRAM_API_KEY` is set. Check the suggestions against the transcript, accept, edit or reject each one, then **Finish review and update roadmap**.
 5. **Maya, Roadmap:** the Branch Tree shows a new **Cybersecurity** branch from the session (the sample conversation mentions it), a "What changed" card, and the accepted actions in this semester's next steps. Her background colors change to match. Mark one done, and it shows as done in Lee's advice tracker.
-6. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, so there's no cold start.
+6. **Maya, Resources:** **Add to my roadmap** on any card. It shows up on Roadmap and Action items straight away, marked "You added", and **Remove** takes it off. She can't remove steps her advisor added.
+7. **Maya, Action items:** her top 3, then **+N more this semester**, later semesters and what's done. **Home** counts what she showed up for, about how much time, her streak and her closest reward. **Sessions** shows each checked summary and what she agreed to do. The bell shows new notifications.
+8. **Maya, Rewards:** an unlocked reward has **Claim it**, which gives a pickup code for the career center desk. **Moments** takes an optional event photo that only she and her team can see.
+9. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, so there's no cold start.
 
 With no API keys, this all still works. The screens say when a conversation is a sample and when suggestions were saved in advance or drafted by rules. If Claude is unavailable, the session falls back the same way.
 
@@ -85,6 +89,7 @@ Enforced in the database, not just the app (see the migration):
 - Recording consent can't be edited or deleted, and only the person themself can give it. Both people must agree before audio is stored.
 - Students can't see AI suggestions until their advisor or coach accepts them. Every suggestion links to the transcript lines behind it, and one with no evidence is dropped.
 - Viewing a transcript is written to the audit log.
+- Students can add library resources to their own roadmap and remove only the steps they added. Event photos are private to the student and their advisor or coach.
 - New sign-ups are students; staff roles are set by an admin. Emails from other domains are refused.
 
 ## Run it on your computer (optional)
@@ -104,7 +109,7 @@ Resume text is read with plain rules on our own server, and email and phone aren
 ## Tests
 
 ```bash
-npm test   # resume reading and roadmap templates
+npm test   # resume reading, roadmap templates and step ordering
 ```
 
 ## Database tests
@@ -117,8 +122,10 @@ psql -f supabase/migrations/0001_init.sql
 psql -f supabase/migrations/0002_roadmap_drafts.sql
 psql -f supabase/migrations/0003_sessions_and_assignment.sql
 psql -f supabase/migrations/0004_branch_tree.sql
+psql -f supabase/migrations/0005_student_tabs.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
 psql -f supabase/tests/40_branch_tree.sql
+psql -f supabase/tests/50_student_tabs.sql
 ```

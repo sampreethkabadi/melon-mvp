@@ -4,10 +4,10 @@ export type NavItem = { href: string; label: string; soon?: boolean };
 export const STUDENT_NAV: NavItem[] = [
   { href: "/student", label: "Home" },
   { href: "/student/roadmap", label: "Roadmap" },
-  { href: "/student/tasks", label: "Action items", soon: true },
-  { href: "/student/sessions", label: "Sessions", soon: true },
-  { href: "/student/rewards", label: "Rewards", soon: true },
-  { href: "/student/resources", label: "Resources", soon: true },
+  { href: "/student/tasks", label: "Action items" },
+  { href: "/student/sessions", label: "Sessions" },
+  { href: "/student/rewards", label: "Rewards" },
+  { href: "/student/resources", label: "Resources" },
 ];
 
 export const STAFF_NAV: NavItem[] = [
