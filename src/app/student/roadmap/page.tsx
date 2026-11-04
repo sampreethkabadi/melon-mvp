@@ -1,14 +1,15 @@
+import Link from "next/link";
 import { Backdrop, INTEREST_COLORS } from "@/components/Backdrop";
 import { SubmitButton } from "@/components/SubmitButton";
 import { firstName, requireRole } from "@/lib/auth";
-import { currentSemester, termOrder, weekOf } from "@/lib/roadmap/semester";
+import { shortDate, shortTerm } from "@/lib/format";
+import { KIND_LABEL, planGroups } from "@/lib/roadmap/plan";
+import { currentSemester, weekOf } from "@/lib/roadmap/semester";
 import { createClient } from "@/lib/supabase/server";
 import { YEAR_LABEL, type ClassYear } from "@/lib/types";
-import { markChangesSeen, pinPath, setItemDone } from "../actions";
+import { addResource, markChangesSeen, pinPath, setItemDone } from "../actions";
 
 export const metadata = { title: "Roadmap · Melon" };
-
-const TZ = "America/Indiana/Indianapolis";
 
 type Item = {
   id: string;
@@ -22,6 +23,7 @@ type Item = {
   due_date: string | null;
   firm: boolean;
   sort: number;
+  resource_id: string | null;
   completed_at: string | null;
 };
 type Path = {
@@ -38,17 +40,6 @@ type Change = { id: string; summary: { kind?: string; added?: string[] }; sessio
 type PastSession = { id: string; created_at: string; staff: { full_name: string } | null };
 type Resource = { id: string; type: string; title: string; provider: string | null; source: string; url: string | null };
 
-const KIND_LABEL: Record<string, string> = {
-  course: "Course",
-  experience: "Experience",
-  skill: "Skill",
-  certification: "Certification",
-  event: "Event",
-  networking: "Networking",
-  application: "Applications",
-  coaching: "Coaching",
-  project: "Project",
-};
 const RESOURCE_LABEL: Record<string, string> = {
   skill: "Skill",
   certification: "Certification",
@@ -71,7 +62,7 @@ export default async function RoadmapPage() {
         .order("sort"),
       supabase
         .from("roadmap_items")
-        .select("id, title, description, rationale, term, kind, status, path_id, due_date, firm, sort, completed_at")
+        .select("id, title, description, rationale, term, kind, status, path_id, due_date, firm, sort, resource_id, completed_at")
         .eq("student_id", profile.id)
         .order("sort"),
       supabase.from("roadmap_changes").select("id, summary, session_id, seen_at, created_at").eq("student_id", profile.id).order("created_at", { ascending: false }).limit(20),
@@ -121,16 +112,7 @@ export default async function RoadmapPage() {
   );
   const pathName = new Map(paths.map((p) => [p.id, p.name]));
 
-  const byPlan = (a: Item, b: Item) =>
-    termOrder(a.term) - termOrder(b.term) ||
-    Number(b.firm) - Number(a.firm) ||
-    (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999") ||
-    a.sort - b.sort;
-  const open = items.filter((i) => i.status === "active").sort(byPlan);
-  const nowItems = open.filter((i) => termOrder(i.term) <= termOrder(sem.term));
-  const focus = (nowItems.length ? nowItems : open).slice(0, 3);
-  const moreCount = (nowItems.length ? nowItems.length : open.length) - focus.length;
-  const doneItems = items.filter((i) => i.status === "done").sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? ""));
+  const { open, nowItems, focus, moreCount, done: doneItems } = planGroups(items, sem);
   const keyDates = open
     .filter((i) => i.due_date)
     .map((i) => ({ item: i, week: weekOf(sem, new Date(`${i.due_date}T12:00:00`)) }))
@@ -142,7 +124,7 @@ export default async function RoadmapPage() {
   const { data: resRows } = interests.length
     ? await supabase.from("resources").select("id, type, title, provider, source, url").overlaps("interests", interests).limit(12)
     : { data: [] };
-  const resources = ((resRows ?? []) as Resource[]).filter((r) => !items.some((i) => i.title === r.title)).slice(0, 4);
+  const resources = ((resRows ?? []) as Resource[]).filter((r) => !items.some((i) => i.title === r.title || i.resource_id === r.id)).slice(0, 4);
 
   const year = sp?.class_year ? YEAR_LABEL[sp.class_year as ClassYear] : null;
   const themeLabel = interests.map((i: string) => INTEREST_COLORS[i]?.label).filter(Boolean).join(" + ");
@@ -270,7 +252,12 @@ export default async function RoadmapPage() {
 
         {resources.length > 0 && (
           <div className="flex flex-col gap-2.5">
-            <h2 className="text-lg font-extrabold">Building your path</h2>
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-lg font-extrabold">Building your path</h2>
+              <Link href="/student/resources" className="text-sm font-semibold text-link">
+                See all resources
+              </Link>
+            </div>
             <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
               {resources.map((r) => (
                 <div key={r.id} className={`flex min-w-0 flex-col gap-0.5 rounded-xl p-3 ${r.source === "melon" ? "bg-new-bg" : "bg-[#F3F8FB]"}`}>
@@ -285,6 +272,9 @@ export default async function RoadmapPage() {
                   ) : (
                     <span className="text-xs text-muted">{r.provider}</span>
                   )}
+                  <form action={addResource.bind(null, r.id)} className="mt-1.5">
+                    <SubmitButton label="Add to my roadmap" variant="link" />
+                  </form>
                 </div>
               ))}
             </div>
@@ -462,12 +452,3 @@ function forkCaption(paths: Path[], grew: boolean) {
   return `${paths.length} paths to explore. Pin one when it clicks.`;
 }
 
-function shortDate(iso: string) {
-  const d = iso.length === 10 ? new Date(`${iso}T12:00:00`) : new Date(iso);
-  return new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "short", day: "numeric" }).format(d);
-}
-
-function shortTerm(term: string | null) {
-  const m = term?.match(/^(Spring|Summer|Fall) (\d{4})$/);
-  return m ? `${m[1]} '${m[2].slice(2)}` : term ?? "";
-}

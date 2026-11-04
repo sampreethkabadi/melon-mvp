@@ -22,7 +22,7 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
   const session = ((data ?? [])[0] ?? null) as unknown as LiveSession | null;
   if (!session) return <AutoRefresh ms={5000} />;
 
-  const answer = session.consents
+  const answer = (session.consents ?? [])
     .filter((c) => c.subject_id === studentId && c.scope === "record")
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .at(-1);
