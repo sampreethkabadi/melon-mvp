@@ -35,6 +35,8 @@ export async function addItem(studentId: string, roadmapId: string, form: FormDa
   const { profile, supabase } = await staff(studentId);
   const title = String(form.get("title") ?? "").trim().slice(0, 200);
   if (!title) throw new Error("An item needs a title.");
+  // A draft goes through approval as a whole. Otherwise the advisor adding it is the approval.
+  const { data: roadmap } = await supabase.from("roadmaps").select("status").eq("id", Id.parse(roadmapId)).single();
   const { error } = await supabase.from("roadmap_items").insert({
     school_id: profile.school_id,
     roadmap_id: Id.parse(roadmapId),
@@ -45,7 +47,7 @@ export async function addItem(studentId: string, roadmapId: string, form: FormDa
     description: "Added by your advisor or coach.",
     rationale: "Your advisor or coach added this for you.",
     source: "staff",
-    approval: "pending",
+    approval: roadmap?.status === "draft" ? "pending" : "approved",
   });
   if (error) throw new Error("Couldn't add that item. Check that this student is assigned to you.");
   refresh(studentId);
@@ -61,9 +63,10 @@ export async function dropPath(studentId: string, pathId: string) {
   refresh(studentId);
 }
 
-export async function publishRoadmap(studentId: string) {
+/** The advisor's half of the sign-off. The student then sees the roadmap and accepts it. */
+export async function approveRoadmap(studentId: string) {
   const { supabase } = await staff(studentId);
-  const { error } = await supabase.rpc("publish_roadmap", { p_student: studentId });
+  const { error } = await supabase.rpc("approve_roadmap", { p_student: studentId });
   if (error) throw new Error(error.message);
   refresh(studentId);
 }

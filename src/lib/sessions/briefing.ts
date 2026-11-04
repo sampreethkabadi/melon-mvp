@@ -33,6 +33,8 @@ export function buildBriefing(b: BriefingInput): Briefing {
     points.push(`Roadmap: ${live.filter((i) => i.status === "done").length} of ${live.length} items done.`);
   } else if (b.roadmapStatus === "draft") {
     points.push("Roadmap: a draft is waiting for review, and the student can't see it yet.");
+  } else if (b.roadmapStatus === "awaiting_student") {
+    points.push("Roadmap: approved and waiting for the student to accept it.");
   } else {
     points.push("Roadmap: not started.");
   }

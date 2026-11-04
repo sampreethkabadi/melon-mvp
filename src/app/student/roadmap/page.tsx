@@ -9,7 +9,7 @@ import { currentSemester, weekOf } from "@/lib/roadmap/semester";
 import { alumniFor, focusSteps, KIND_LABEL, loadRoadmap, pathLadders, pinLimit, type Path, type Step } from "@/lib/student-data";
 import { createClient } from "@/lib/supabase/server";
 import { YEAR_LABEL } from "@/lib/types";
-import { addResource, markChangesSeen, setItemDone, setPin } from "../actions";
+import { acceptRoadmap, addResource, markChangesSeen, setItemDone, setPin } from "../actions";
 
 export const metadata = { title: "Roadmap · Melon" };
 
@@ -24,14 +24,17 @@ export default async function RoadmapPage() {
   const data = await loadRoadmap(supabase, profile.id);
   const { roadmap, year, interests, paths: allPaths, pinned, steps } = data;
 
+  if (roadmap?.status === "awaiting_student") {
+    return <AcceptRoadmap interests={interests} paths={allPaths} steps={steps} />;
+  }
+
   if (roadmap?.status !== "published") {
     return (
       <main className="relative mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8 sm:px-6">
         <Backdrop interests={interests} />
         <h1 className="text-3xl font-extrabold tracking-tight">Your roadmap</h1>
         <p className="rounded-3xl border border-line bg-white/95 p-6 text-ink-2">
-          Your first roadmap is with your advisor or coach for a quick check. It shows up here once they approve it, or
-          right after your next session with them.
+          Your first roadmap is with your advisor or coach. Once they approve it, it comes to you here to accept.
         </p>
       </main>
     );
@@ -80,6 +83,20 @@ export default async function RoadmapPage() {
   const addedBy = (sessionId: string) =>
     changes.filter((c) => c.session_id === sessionId).reduce((n, c) => n + (c.summary.added?.filter((a) => !a.startsWith("New path")).length ?? 0), 0);
 
+  // Oldest first. On the same day, the roadmap starting comes before what happened after it.
+  const trunk = [
+    ...(roadmap.published_at ? [{ key: "start", when: roadmap.published_at, text: "Your roadmap started", order: 0 }] : []),
+    ...sessions.map((s) => {
+      const added = addedBy(s.id);
+      return {
+        key: s.id,
+        when: s.created_at,
+        text: `${s.session_type ?? "Session"} with ${s.staff?.full_name ?? "your team"}${added ? ` · ${added} step${added === 1 ? "" : "s"}` : ""}`,
+        order: 1,
+      };
+    }),
+  ].sort((a, b) => a.when.slice(0, 10).localeCompare(b.when.slice(0, 10)) || a.order - b.order || a.when.localeCompare(b.when));
+
   return (
     <main className="relative mx-auto grid max-w-7xl items-start gap-6 px-4 py-8 sm:px-6 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
       <Backdrop interests={interests} />
@@ -88,17 +105,9 @@ export default async function RoadmapPage() {
       <section aria-label="Your path" className="order-2 flex flex-col lg:order-1">
         <Eyebrow>Your growth so far</Eyebrow>
         <ol className="ml-2.5 mt-3 flex flex-col gap-3.5 border-l-[5px] border-[#B9C9BF] pb-2 pl-6">
-          {roadmap.published_at && <TrunkEntry when={roadmap.published_at} text="Your roadmap started" />}
-          {sessions.map((s) => {
-            const added = addedBy(s.id);
-            return (
-              <TrunkEntry
-                key={s.id}
-                when={s.created_at}
-                text={`${s.session_type ?? "Session"} with ${s.staff?.full_name ?? "your team"}${added ? ` · ${added} step${added === 1 ? "" : "s"}` : ""}`}
-              />
-            );
-          })}
+          {trunk.map((t) => (
+            <TrunkEntry key={t.key} when={t.when} text={t.text} />
+          ))}
           {f.done.length > 0 && <TrunkEntry text={`${f.done.length} step${f.done.length === 1 ? "" : "s"} done`} />}
           {dropped.map((p) => (
             <TrunkEntry key={p.id} text={`${p.name} (explored)`} explored />
@@ -246,6 +255,47 @@ export default async function RoadmapPage() {
         <SwagStrip reward={rewards.next} />
       </section>
     </main>
+  );
+}
+
+/** The student's half of the sign-off: what their advisor or coach approved, and a way to accept it. */
+function AcceptRoadmap({ interests, paths, steps }: { interests: string[]; paths: Path[]; steps: Step[] }) {
+  const live = paths.filter((p) => p.status !== "dropped");
+  const general = steps.filter((s) => !s.path_id || !live.some((p) => p.id === s.path_id));
+  return (
+    <main className="relative mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8 sm:px-6">
+      <Backdrop interests={interests} />
+      <div>
+        <h1 className="text-3xl font-extrabold tracking-tight">Your roadmap is ready to accept</h1>
+        <p className="mt-1 text-ink-2">Your advisor or coach approved this. Read it over. Once you accept, it becomes your roadmap.</p>
+      </div>
+      {live.map((p) => (
+        <AcceptSection key={p.id} title={p.name} note={p.reason} steps={steps.filter((s) => s.path_id === p.id)} />
+      ))}
+      {general.length > 0 && <AcceptSection title="Whichever path you take" steps={general} />}
+      <form action={acceptRoadmap} className="flex flex-col items-start gap-2 rounded-3xl border-2 bg-white/95 p-6" style={{ borderColor: "var(--school)" }}>
+        <SubmitButton label="Accept my roadmap" />
+        <p className="text-sm text-muted">Something not right? Talk to your advisor or coach before you accept. They can change it.</p>
+      </form>
+    </main>
+  );
+}
+
+function AcceptSection({ title, note, steps }: { title: string; note?: string | null; steps: Step[] }) {
+  return (
+    <section className="flex flex-col gap-2 rounded-3xl border border-line bg-white/95 p-6">
+      <h2 className="text-lg font-extrabold">{title}</h2>
+      {note && <p className="text-sm text-muted">{note}</p>}
+      <ul className="flex flex-col gap-2">
+        {steps.map((s) => (
+          <li key={s.id} className="rounded-2xl border border-line bg-white p-3">
+            <p className="font-semibold">{s.title}</p>
+            <p className="text-sm text-muted">{s.term}</p>
+            {s.rationale && <p className="mt-1 text-sm text-ink-2">Why: {s.rationale}</p>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
