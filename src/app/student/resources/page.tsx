@@ -2,7 +2,6 @@ import Link from "next/link";
 import { Backdrop } from "@/components/Backdrop";
 import { AddButton, Eyebrow, Panel, ResCard } from "@/components/student/ui";
 import { requireRole } from "@/lib/auth";
-import { levelFor } from "@/lib/catalog";
 import { longDate, timeOf } from "@/lib/format";
 import { alumniFor, loadRoadmap, pathLadders, RESOURCE_COLUMNS, RESOURCE_LABEL, upcomingEvents, type Resource } from "@/lib/student-data";
 import { createClient } from "@/lib/supabase/server";
@@ -22,14 +21,13 @@ export default async function ResourcesPage() {
     alumniFor(supabase, pinned),
     upcomingEvents(supabase, pinned, 5),
     pinnedInterests.length
-      ? supabase.from("resources").select(RESOURCE_COLUMNS).overlaps("interests", pinnedInterests).or(`level.is.null,level.neq.${levelFor(year)}`).neq("type", "event").limit(20)
+      ? supabase.from("resources").select(RESOURCE_COLUMNS).overlaps("interests", pinnedInterests).eq("type", "club").contains("tags", ["club"]).limit(10)
       : Promise.resolve({ data: [] }),
   ]);
   const canAdd = roadmap?.status === "published";
   const stepFor = (r: Resource) => steps.find((s) => s.resource_id === r.id);
   const extras = ((more ?? []) as Resource[]).filter((r) => !ladders.some((l) => l.rungs.some((x) => x.title === r.title)));
   const clubs = extras.filter((r) => r.type === "club").slice(0, 3);
-  const deeper = extras.filter((r) => r.type !== "club").slice(0, 6);
 
   const action = (r: Resource) => {
     const s = stepFor(r);
@@ -143,16 +141,18 @@ export default async function ResourcesPage() {
         )}
       </div>
 
-      {deeper.length > 0 && (
-        <details className="rounded-[22px] border border-line bg-white/90 p-5">
-          <summary className="cursor-pointer font-extrabold">More for {pinned.map((p) => p.name).join(" and ")}, when you&apos;re ready</summary>
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
-            {deeper.map((r) => (
-              <ResCard key={r.id} kicker={RESOURCE_LABEL[r.type] ?? r.type} title={r.title} provider={r.provider} url={r.url} action={action(r)} />
-            ))}
-          </div>
-        </details>
-      )}
+      {ladders
+        .filter((l) => l.more.length)
+        .map((l) => (
+          <details key={l.path.id} className="rounded-[22px] border border-line bg-white/90 p-5">
+            <summary className="cursor-pointer font-extrabold">More for {l.path.name}, when you&apos;re ready</summary>
+            <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
+              {l.more.map((r) => (
+                <ResCard key={r.id} kicker={RESOURCE_LABEL[r.type] ?? r.type} title={r.title} provider={r.provider} url={r.url} blurb={r.blurb} action={action(r)} />
+              ))}
+            </div>
+          </details>
+        ))}
       {paths.length > pinned.length && pinned.length > 0 && (
         <p className="text-sm text-muted">
           Want ideas for another path? Pin it on your{" "}

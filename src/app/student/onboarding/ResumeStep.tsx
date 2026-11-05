@@ -49,13 +49,17 @@ export function ResumeStep({ studentId }: { studentId: string }) {
         <p className="mt-1 text-ink-2">We&apos;ll use it to fill in your profile, and you can check everything next. Only you and your advisor or coach can open it.</p>
       </div>
       <p className="rounded-xl bg-warn-bg px-3 py-2 text-sm font-semibold text-warn-ink">
-        This is a demo, so please don&apos;t upload a real resume. Use a sample:{" "}
-        <a href="/samples/sam-okafor.pdf" className="underline">
-          PDF
+        This is a demo, so please don&apos;t upload a real resume. Download a sample, then upload it here:{" "}
+        <a href="/samples/riya-mehta-data-science-junior.pdf" download className="underline">
+          Data Science junior
+        </a>
+        ,{" "}
+        <a href="/samples/ethan-brooks-computer-science-sophomore.pdf" download className="underline">
+          Computer Science sophomore
         </a>{" "}
         or{" "}
-        <a href="/samples/ava-chen.docx" className="underline">
-          Word
+        <a href="/samples/olivia-grant-business-senior.pdf" download className="underline">
+          Business senior
         </a>
         .
       </p>

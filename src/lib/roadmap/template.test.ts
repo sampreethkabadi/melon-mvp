@@ -81,3 +81,16 @@ test("names keep their acronyms in lower case", () => {
   assert.equal(lowerName("ML engineer"), "ML engineer");
   assert.equal(lowerName("Data analyst"), "data analyst");
 });
+
+test("each pinned job gets its own list, and Data analyst and ML engineer differ", async () => {
+  const { jobKeyFor, jobResources } = await import("../catalog.ts");
+  assert.equal(jobKeyFor("Data analyst"), "data-analyst");
+  assert.equal(jobKeyFor("ML engineer"), "ml-engineer");
+  assert.equal(jobKeyFor("Cybersecurity", "Security analyst"), "security-analyst");
+  assert.equal(jobKeyFor("Backend engineer"), "software-engineer");
+  assert.equal(jobKeyFor("Product designer"), "ux-designer");
+  assert.equal(jobKeyFor("Gardener"), null);
+  const list = (key: string) => jobResources().filter((r) => r.tags.includes(`job:${key}`)).map((r) => r.title);
+  assert.equal(list("data-analyst").length, 6);
+  assert.notDeepEqual(list("data-analyst").slice(0, 3), list("ml-engineer").slice(0, 3));
+});

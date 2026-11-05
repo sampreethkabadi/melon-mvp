@@ -76,14 +76,72 @@ export const SEED_DONE_ANSWERS: Record<string, { answers: Record<string, string>
   "priya@melon.test": { answers: { search_stage: "interviewing", linkedin_status: "basic" }, target_roles: ["Financial analyst", "Consultant", "Investment associate"] },
 };
 
-export const SEED_COURSES = [
-  ["CSCI-C 200", "Intro to Programming", "Fall 2024", "completed"],
-  ["CSCI-C 343", "Data Structures", "Spring 2025", "completed"],
-  ["STAT-S 350", "Statistics I", "Fall 2024", "completed"],
-  ["MATH-M 301", "Linear Algebra", "Spring 2025", "completed"],
-  ["INFO-I 308", "Databases", "Fall 2025", "completed"],
-  ["CSCI-B 365", "Intro to Machine Learning", "Fall 2026", "in_progress"],
-] as const;
+type Course = [code: string, title: string, term: string, status: "completed" | "in_progress"];
+type Job = { title: string; org: string | null; start: string; end: string };
+
+/**
+ * Invented history for the road on the Roadmap tab: courses as if from school records, and jobs, research
+ * and projects as if read from each student's resume. Seniors and juniors get a full road; freshmen start fresh.
+ */
+export const SEED_HISTORY: Record<string, { courses: Course[]; experience: Job[]; clubs: string[]; events?: Array<[title: string, iso: string]> }> = {
+  "maya@melon.test": {
+    courses: [
+      ["CSCI-C 200", "Intro to Programming", "Fall 2024", "completed"],
+      ["STAT-S 350", "Statistics I", "Fall 2024", "completed"],
+      ["CSCI-C 343", "Data Structures", "Spring 2025", "completed"],
+      ["MATH-M 301", "Linear Algebra", "Spring 2025", "completed"],
+      ["INFO-I 308", "Databases", "Fall 2025", "completed"],
+      ["STAT-S 352", "Statistics II", "Spring 2026", "completed"],
+      ["CSCI-B 365", "Intro to Machine Learning", "Fall 2026", "in_progress"],
+    ],
+    experience: [
+      { title: "Research Assistant", org: "IU Social Media Lab", start: "Jan 2025", end: "May 2025" },
+      { title: "Data Analytics Intern", org: "Hoosier Health", start: "Jun 2025", end: "Aug 2025" },
+      { title: "Bike-Share Demand Model", org: null, start: "Oct 2025", end: "Dec 2025" },
+      { title: "Teaching Assistant, STAT-S 350", org: "Indiana University", start: "Jan 2026", end: "May 2026" },
+    ],
+    clubs: ["Data Science Club"],
+  },
+  "priya@melon.test": {
+    courses: [
+      ["BUS-A 100", "Basic Accounting Skills", "Fall 2023", "completed"],
+      ["ECON-E 201", "Intro to Microeconomics", "Fall 2023", "completed"],
+      ["BUS-K 201", "The Computer in Business", "Spring 2024", "completed"],
+      ["BUS-F 370", "Integrated Core: Finance", "Fall 2024", "completed"],
+      ["BUS-F 303", "Intermediate Investments", "Spring 2025", "completed"],
+      ["BUS-F 305", "Intermediate Corporate Finance", "Fall 2025", "completed"],
+      ["BUS-F 420", "Equity Valuation", "Spring 2026", "completed"],
+      ["BUS-F 446", "Bank Management", "Fall 2026", "in_progress"],
+    ],
+    experience: [
+      { title: "Peer Tutor, Accounting", org: "Academic Support Center", start: "Jan 2024", end: "May 2024" },
+      { title: "Treasurer, Finance Club", org: null, start: "Sep 2024", end: "Present" },
+      { title: "Summer Analyst Intern", org: "Midwest Regional Bank", start: "Jun 2025", end: "Aug 2025" },
+      { title: "Investment Banking Summer Analyst", org: "Hoosier Capital Partners", start: "Jun 2026", end: "Aug 2026" },
+    ],
+    clubs: ["Finance Club"],
+    events: [
+      ["Fall career fair", "2024-09-19T16:00:00Z"],
+      ["Spring career fair", "2025-02-26T17:00:00Z"],
+      ["Alumni networking night", "2025-10-07T23:00:00Z"],
+    ],
+  },
+  "sam@melon.test": {
+    courses: [
+      ["CSCI-C 211", "Intro to Computer Science", "Fall 2024", "completed"],
+      ["CSCI-C 212", "Intro to Software Systems", "Spring 2025", "completed"],
+      ["CSCI-C 343", "Data Structures", "Fall 2025", "completed"],
+      ["CSCI-C 241", "Discrete Structures", "Spring 2026", "completed"],
+      ["CSCI-P 436", "Intro to Operating Systems", "Fall 2026", "in_progress"],
+    ],
+    experience: [
+      { title: "IT Help Desk Assistant", org: "University IT Services", start: "Jan 2025", end: "Present" },
+      { title: "Campus Events App", org: null, start: "Sep 2025", end: "Dec 2025" },
+    ],
+    clubs: ["Computer Science Club"],
+    events: [["Spring career fair", "2026-02-25T17:00:00Z"]],
+  },
+};
 
 /**
  * What Maya did in earlier semesters, so her candy road has something to be proud of. Terms count back from

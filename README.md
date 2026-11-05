@@ -61,7 +61,8 @@ Open `https://YOUR-VERCEL-LINK/api/dev/seed?secret=YOUR_SEED_SECRET` in a browse
 - **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
 - **Other students:** `ava@`, `daniel@`, `nina@`, `omar@` (Malik), `grace@`, `tyler@`, `zoe@`, `marcus@` (Becker), all `@melon.test`
 - Demo-day appointments, each with the type the student booked (for example Maya: Course planning with Lee, Career fair preparation with Rivera)
-- A short "start here, then this" list per path and year, clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations
+- A short "start here, then this" list per path and year (juniors and up: per job, for 12 common jobs), clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations
+- Past semesters for Maya, Priya and Sam: courses (as if from school records) and jobs and projects (as if from their resumes), so their roads look lived-in
 
 Sign in to test accounts with **Have a test account? Use a password** and your `SEED_PASSWORD`.
 
@@ -131,7 +132,7 @@ npm run dev                  # http://localhost:3000
 
 ## Resumes, roadmaps and AI
 
-Resume text is read with plain rules on our own server, and email and phone aren't kept. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
+Resume text is read with plain rules on our own server, and email and phone aren't kept. Dated jobs, research and projects are kept so the road can place them in the right semester. Testers upload the invented sample resumes in `public/samples/` (sources in `docs/sample-resumes/`), never a real one. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
 
 **Known gap:** audio isn't deleted automatically yet. `recordings.delete_after` is set to 30 days, but nothing acts on it. Add a scheduled job before using anything other than mock data.
 

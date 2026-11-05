@@ -4,13 +4,13 @@ import { earlierConversation, sampleConversation } from "@/lib/sessions/demo";
 import { sampleForStudent } from "@/lib/sessions/sample-for-student";
 import type { DraftInsight, Segment } from "@/lib/sessions/types";
 import { buildFirstRoadmap } from "@/lib/roadmap/template";
-import { ALUMNI, CLUBS, careerEvents, ladderResources } from "@/lib/catalog";
+import { ALUMNI, CLUBS, careerEvents, jobResources, ladderResources } from "@/lib/catalog";
 import { addDays, appNow, DEMO_TODAY, localDate } from "@/lib/clock";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   SEED_APPOINTMENTS,
-  SEED_COURSES,
   SEED_DONE_ANSWERS,
+  SEED_HISTORY,
   SEED_INTEGRATIONS,
   SEED_MAYA_WINS,
   SEED_REWARDS,
@@ -151,12 +151,24 @@ export async function GET(request: NextRequest) {
   if (apErr) return fail(`appointments: ${apErr.message}`);
   log.push(`${appts.length} appointments on ${today}`);
 
-  // Maya's courses (from "school records")
+  // Past semesters for the road: courses from "school records", and resume history.
+  await db.from("student_courses").delete().in("student_id", studentIds);
+  for (const [email, h] of Object.entries(SEED_HISTORY)) {
+    const id = ids[email];
+    const { error: cErr } = await db
+      .from("student_courses")
+      .insert(h.courses.map(([code, title, term, status]) => ({ school_id: schoolId, student_id: id, code, title, term, status })));
+    if (cErr) return fail(`courses ${email}: ${cErr.message}`);
+    const { data: sp } = await db.from("student_profiles").select("resume_parsed").eq("user_id", id).single();
+    await db
+      .from("student_profiles")
+      .update({ clubs: h.clubs, resume_parsed: { ...((sp?.resume_parsed as object | null) ?? {}), experience: h.experience, clubs: h.clubs } })
+      .eq("user_id", id);
+    if (h.events?.length) {
+      await db.from("activities").insert(h.events.map(([title, occurred_at]) => ({ school_id: schoolId, student_id: id, kind: "event", title, minutes: 120, occurred_at })));
+    }
+  }
   const maya = ids["maya@melon.test"];
-  await db.from("student_courses").delete().eq("student_id", maya);
-  await db.from("student_courses").insert(
-    SEED_COURSES.map(([code, title, term, status]) => ({ school_id: schoolId, student_id: maya, code, title, term, status })),
-  );
 
   // Resource library: a short ladder per path and year, clubs on beInvolved, and career services events.
   await db.from("resources").delete().eq("school_id", schoolId).contains("tags", ["seed"]);
@@ -170,7 +182,7 @@ export async function GET(request: NextRequest) {
     source: "library" as const,
     tags: ["seed", "club"],
   }));
-  const library = [...ladder, ...clubs, ...careerEvents(Number(today.slice(0, 4)))];
+  const library = [...ladder, ...jobResources(), ...clubs, ...careerEvents(Number(today.slice(0, 4)))];
   const { error: resErr } = await db.from("resources").insert(library.map((r) => ({ ...r, school_id: schoolId, is_free: true })));
   if (resErr) return fail(`resources: ${resErr.message}`);
 

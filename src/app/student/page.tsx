@@ -46,12 +46,19 @@ export default async function StudentHome() {
   if (sp && sp.onboarding_step !== "done") redirect("/student/onboarding");
 
   const { roadmap, year, majors, interests, pinned, steps } = data;
-  const staff = (team ?? []) as unknown as Array<{ kind: string; staff: { full_name: string; role: Role } | null }>;
+  const staff = (team ?? []) as unknown as Array<{
+    kind: string;
+    staff: { full_name: string; role: Role } | null;
+  }>;
   const published = roadmap?.status === "published";
   const sem = currentSemester();
   const f = focusSteps(steps, sem);
   const next = published ? f.now[0] : undefined;
-  const nextAppt = appt as unknown as { starts_at: string; type: string; staff: { full_name: string; role: Role } | null } | null;
+  const nextAppt = appt as unknown as {
+    starts_at: string;
+    type: string;
+    staff: { full_name: string; role: Role } | null;
+  } | null;
   const latestSummary = (summaryRows?.[0]?.payload as { text?: string } | undefined)?.text;
   const p = rewards.progress;
   const unlocked = rewards.all.filter((r) => r.unlocked);
@@ -84,7 +91,10 @@ export default async function StudentHome() {
 
       {/* The important things first. */}
       <div className="grid gap-4 md:grid-cols-3">
-        <section className="flex flex-col gap-2 rounded-3xl border-2 bg-white/95 p-6 shadow-sm md:col-span-2" style={{ borderColor: "var(--school)" }}>
+        <section
+          className="flex flex-col gap-2 rounded-3xl border-2 bg-white/95 p-6 shadow-sm md:col-span-2"
+          style={{ borderColor: "var(--school)" }}
+        >
           <Eyebrow>Up next on your roadmap</Eyebrow>
           {next ? (
             <>
@@ -138,13 +148,15 @@ export default async function StudentHome() {
               </p>
               {nextAppt.staff && (
                 <span className="mt-2 inline-block">
-                  <Pill tone={nextAppt.staff.role === "coach" ? "new" : "plain"}>{nextAppt.staff.role === "coach" ? "Career coach · career" : "Advisor · courses"}</Pill>
+                  <Pill tone={nextAppt.staff.role === "coach" ? "new" : "plain"}>
+                    {nextAppt.staff.role === "coach" ? "Career coach · career" : "Advisor · courses"}
+                  </Pill>
                 </span>
               )}
             </section>
           )}
           {rewards.next && (
-            <Link href="/student/rewards" className="rounded-3xl border border-line bg-white/95 p-5 hover:border-ink">
+            <Link href="/student/rewards" className="tile-hover is-link rounded-3xl border border-line bg-white/95 p-5">
               <Eyebrow>Closest reward</Eyebrow>
               <b className="mt-1 block">{rewards.next.name}</b>
               <div className="mt-2">
@@ -162,7 +174,9 @@ export default async function StudentHome() {
                 {staff.map((s, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 text-sm">
                     <b>{s.staff?.full_name}</b>
-                    <span className="text-muted">{s.staff ? (s.staff.role === "coach" ? "Career coach · careers" : `${ROLE_LABEL[s.staff.role]} · courses`) : s.kind}</span>
+                    <span className="text-muted">
+                      {s.staff ? (s.staff.role === "coach" ? "Career coach · careers" : `${ROLE_LABEL[s.staff.role]} · courses`) : s.kind}
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -174,128 +188,161 @@ export default async function StudentHome() {
       </div>
 
       {/* Your semester so far, Wrapped-style. Only ever compares you with you. */}
-      <section aria-label={`Your ${term} so far`} className="flex flex-col gap-3">
-        <h2 className="text-lg font-extrabold">Your {term} so far</h2>
-        <div className="grid gap-4 [grid-template-areas:'hero'_'a'_'b'_'c'_'d'_'streak'_'swag'_'moment'] sm:grid-cols-2 sm:[grid-template-areas:'hero_hero'_'a_b'_'c_d'_'streak_swag'_'moment_moment'] lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)] lg:[grid-template-areas:'hero_a_b'_'hero_c_d'_'streak_swag_moment']">
-          <div className="flex flex-col gap-1.5 rounded-3xl bg-ink p-8 text-white [grid-area:hero]">
-            <span className="text-xs font-extrabold uppercase tracking-[.06em] text-lime">
-              Your {sem.term.split(" ")[0]} so far · week {sem.week}
-            </span>
-            <span className="mt-2 text-2xl font-bold">{firstName(profile.full_name)}, you showed up for yourself</span>
-            <div className="flex flex-wrap items-end gap-4">
-              <span className="text-[96px] font-extrabold leading-[.9] tracking-[-.05em] text-lime tabular-nums lg:text-[140px]">{p.showedUp}</span>
-              <span className="pb-3.5 text-[28px] font-extrabold leading-[1.1]">
-                time{p.showedUp === 1 ? "" : "s"}
-                <br />
-                this semester
+      {p.showedUp === 0 ? (
+        <section className="tile-hover flex flex-col gap-2 rounded-3xl bg-ink p-7 text-white">
+          <span className="text-xs font-extrabold uppercase tracking-[.08em] text-lime">Your {term}</span>
+          <b className="text-2xl font-extrabold">Your story starts this week.</b>
+          <p className="max-w-xl text-[15px] text-[#D9E6DE]">
+            {next
+              ? `Start with "${next.title}". Every session, event and step you finish shows up here.`
+              : "Every session, event and step you finish shows up here."}
+          </p>
+        </section>
+      ) : (
+        <section aria-label={`Your ${term} so far`} className="flex flex-col gap-3">
+          <h2 className="text-lg font-extrabold">Your {term} so far</h2>
+          <div className="grid grid-flow-dense gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="tile-hover flex flex-col gap-1.5 rounded-3xl bg-ink p-8 text-white sm:col-span-2 lg:row-span-2">
+              <span className="text-xs font-extrabold uppercase tracking-[.06em] text-lime">
+                Your {sem.term.split(" ")[0]} so far · week {sem.week}
               </span>
-            </div>
-            <p className="text-[15px] font-medium text-[#D9E6DE]">
-              {p.showedUp === 0
-                ? "Your first step this week starts the count."
-                : p.showedUpLastTerm > 0 && up > 0
-                  ? "Sessions, events, workshops and steps you finished. That's more than all of last spring already."
-                  : "Sessions, events, workshops and steps you finished. Every one counts toward your rewards."}
-            </p>
-            <div className="mt-auto pt-4">
-              <Link href="/student/roadmap" className="inline-block rounded-full bg-lime px-5 py-2.5 text-sm font-extrabold text-ink">
-                Open my roadmap
-              </Link>
-            </div>
-          </div>
-          <Tile area="a" bg="#FF9A8B" fg="#2A0E09" label="Hours invested in you">
-            <div className="mt-auto flex items-baseline gap-1.5">
-              <span className="text-[68px] font-extrabold leading-[.9] tracking-[-.05em] tabular-nums">{p.hours}</span>
-              <span className="text-[22px] font-extrabold">hrs</span>
-            </div>
-            <p>About, from sessions, events and steps you finished.</p>
-          </Tile>
-          <Tile area="b" bg="#9ED8F5" fg="#0B2C3D" label="Skills leveled up">
-            <div className="mt-auto flex items-center gap-3.5">
-              <span className="text-[68px] font-extrabold leading-[.9] tabular-nums">{p.skills.length}</span>
-              <div className="flex min-w-0 flex-col gap-1">
-                {p.skills.length ? (
-                  p.skills.map((s) => (
-                    <span key={s} className="truncate rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold">
-                      {s}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-xs font-semibold">Finish a skill step to start.</span>
-                )}
+              <span className="mt-2 text-2xl font-bold">{firstName(profile.full_name)}, you showed up for yourself</span>
+              <div className="flex flex-wrap items-end gap-4">
+                <span className="text-[96px] font-extrabold leading-[.9] tracking-[-.05em] text-lime tabular-nums lg:text-[140px]">{p.showedUp}</span>
+                <span className="pb-3.5 text-[28px] font-extrabold leading-[1.1]">
+                  time{p.showedUp === 1 ? "" : "s"}
+                  <br />
+                  this semester
+                </span>
+              </div>
+              <p className="text-[15px] font-medium text-[#D9E6DE]">
+                {p.showedUp === 0
+                  ? "Your first step this week starts the count."
+                  : p.showedUpLastTerm > 0 && up > 0
+                    ? "Sessions, events, workshops and steps you finished. That's more than all of last spring already."
+                    : "Sessions, events, workshops and steps you finished. Every one counts toward your rewards."}
+              </p>
+              <div className="mt-auto pt-4">
+                <Link href="/student/roadmap" className="inline-block rounded-full bg-lime px-5 py-2.5 text-sm font-extrabold text-ink">
+                  Open my roadmap
+                </Link>
               </div>
             </div>
-          </Tile>
-          <Tile area="c" bg="#C9C1FF" fg="#1E1750" label="Your career vibe">
-            <span className="mt-auto text-[28px] font-extrabold leading-[1.05] tracking-[-.03em]">{vibe}</span>
-            <p className="text-[15px]">{vibeSub}</p>
-          </Tile>
-          <Tile area="d" bg="#FFD166" fg="#3A2B00" label="People in your corner">
-            <span className="mt-auto text-[68px] font-extrabold leading-[.9] tabular-nums">{p.people}</span>
-            <p>Your advisor and career coach{p.people > 2 ? ", and more" : ""}.</p>
-          </Tile>
-          <Tile area="streak" bg="var(--color-lime)" fg="#1E2A06" label="Your streak">
-            <div className="flex items-baseline gap-2.5">
-              <span className="text-[90px] font-extrabold leading-[.9] tabular-nums">{p.streakWeeks}</span>
-              <span className="text-2xl font-extrabold leading-[1.1]">
-                week{p.streakWeeks === 1 ? "" : "s"}
-                <br />
-                in a row
-              </span>
-            </div>
-            <p className="text-sm">At least one thing for your career, every week.</p>
-            <div className="mt-auto grid grid-cols-9 gap-1.5" aria-hidden="true">
-              {p.weeks.map((on, i) => (
-                <i key={i} className={`h-[34px] rounded-[10px] ${on ? "bg-ink" : "bg-ink/15"} ${i === 8 ? "shadow-[0_0_0_3px_#fff]" : ""}`} />
-              ))}
-            </div>
-          </Tile>
-          <div className="flex min-w-0 flex-col gap-2 rounded-3xl border border-line bg-white/95 p-[22px] [grid-area:swag]">
-            <span className="text-xs font-extrabold uppercase tracking-[.06em] text-muted">Swag you&apos;ve earned</span>
-            <span className="text-[22px] font-extrabold leading-[1.1] tracking-tight">
-              {unlocked.length} unlocked{rewards.next ? `, ${rewards.next.need - rewards.next.have <= 1 ? "1 almost yours" : "1 on the way"}` : ""}
-            </span>
-            <div className="mt-auto flex flex-wrap items-center gap-4">
-              {unlocked[0] && (
-                <div className="flex size-[120px] shrink-0 -rotate-6 flex-col items-center justify-center rounded-full border-[6px] border-white bg-melon text-center font-extrabold text-ink shadow-[0_10px_24px_rgba(242,92,102,.35)] outline-2 outline-dashed outline-melon">
-                  <span className="text-[11px] uppercase tracking-[.08em]">Unlocked</span>
-                  <span className="px-2 text-sm leading-tight">{unlocked[0].name}</span>
+            {p.hours > 0 && (
+              <Tile area="a" bg="#FF9A8B" fg="#2A0E09" label="Hours invested in you">
+                <div className="mt-auto flex items-baseline gap-1.5">
+                  <span className="text-[68px] font-extrabold leading-[.9] tracking-[-.05em] tabular-nums">{p.hours}</span>
+                  <span className="text-[22px] font-extrabold">hrs</span>
                 </div>
-              )}
-              {rewards.next && (
-                <div className="flex min-w-0 flex-1 rotate-3 flex-col gap-1.5 rounded-[18px] border-2 border-dashed border-[#B9C2BD] p-3.5">
-                  <b>{rewards.next.name}</b>
-                  <small className="text-muted">{rewards.next.need - rewards.next.have} more to go</small>
-                  <Bar pct={(rewards.next.have / rewards.next.need) * 100} color="var(--color-melon)" />
-                  <small>
-                    <b>
-                      {rewards.next.have} of {rewards.next.need}
-                    </b>
-                  </small>
+                <p>About, from sessions, events and steps you finished.</p>
+              </Tile>
+            )}
+            {p.skills.length > 0 && (
+              <Tile area="b" bg="#9ED8F5" fg="#0B2C3D" label="Skills leveled up">
+                <div className="mt-auto flex items-center gap-3.5">
+                  <span className="text-[68px] font-extrabold leading-[.9] tabular-nums">{p.skills.length}</span>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    {p.skills.length ? (
+                      p.skills.map((s) => (
+                        <span key={s} className="truncate rounded-full bg-white/70 px-2.5 py-0.5 text-xs font-bold">
+                          {s}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs font-semibold">Finish a skill step to start.</span>
+                    )}
+                  </div>
                 </div>
-              )}
-            </div>
-            <Link href="/student/rewards" className="self-start text-sm font-semibold text-link">
-              See all rewards
-            </Link>
+              </Tile>
+            )}
+            <Tile area="c" bg="#C9C1FF" fg="#1E1750" label="Your career vibe">
+              <span className="mt-auto text-[28px] font-extrabold leading-[1.05] tracking-[-.03em]">{vibe}</span>
+              <p className="text-[15px]">{vibeSub}</p>
+            </Tile>
+            {p.people > 0 && (
+              <Tile area="d" bg="#FFD166" fg="#3A2B00" label="People in your corner">
+                <span className="mt-auto text-[68px] font-extrabold leading-[.9] tabular-nums">{p.people}</span>
+                <p>
+                  Your advisor and career coach
+                  {p.people > 2 ? ", and more" : ""}.
+                </p>
+              </Tile>
+            )}
+            {p.streakWeeks > 0 && (
+              <Tile area="streak" bg="var(--color-lime)" fg="#1E2A06" label="Your streak">
+                <div className="flex items-baseline gap-2.5">
+                  <span className="text-[90px] font-extrabold leading-[.9] tabular-nums">{p.streakWeeks}</span>
+                  <span className="text-2xl font-extrabold leading-[1.1]">
+                    week{p.streakWeeks === 1 ? "" : "s"}
+                    <br />
+                    in a row
+                  </span>
+                </div>
+                <p className="text-sm">At least one thing for your career, every week.</p>
+                <div className="mt-auto grid grid-cols-9 gap-1.5" aria-hidden="true">
+                  {p.weeks.map((on, i) => (
+                    <i key={i} className={`h-[34px] rounded-[10px] ${on ? "bg-ink" : "bg-ink/15"} ${i === 8 ? "shadow-[0_0_0_3px_#fff]" : ""}`} />
+                  ))}
+                </div>
+              </Tile>
+            )}
+            {(unlocked.length > 0 || (rewards.next?.have ?? 0) > 0) && (
+              <div className="tile-hover flex min-w-0 flex-col gap-2 rounded-3xl border border-line bg-white/95 p-[22px]">
+                <span className="text-xs font-extrabold uppercase tracking-[.06em] text-muted">Swag you&apos;ve earned</span>
+                <span className="text-[22px] font-extrabold leading-[1.1] tracking-tight">
+                  {unlocked.length} unlocked
+                  {rewards.next ? `, ${rewards.next.need - rewards.next.have <= 1 ? "1 almost yours" : "1 on the way"}` : ""}
+                </span>
+                <div className="mt-auto flex flex-wrap items-center gap-4">
+                  {unlocked[0] && (
+                    <div className="flex size-[120px] shrink-0 -rotate-6 flex-col items-center justify-center rounded-full border-[6px] border-white bg-melon text-center font-extrabold text-ink shadow-[0_10px_24px_rgba(242,92,102,.35)] outline-2 outline-dashed outline-melon">
+                      <span className="text-[11px] uppercase tracking-[.08em]">Unlocked</span>
+                      <span className="px-2 text-sm leading-tight">{unlocked[0].name}</span>
+                    </div>
+                  )}
+                  {rewards.next && (
+                    <div className="flex min-w-0 flex-1 rotate-3 flex-col gap-1.5 rounded-[18px] border-2 border-dashed border-[#B9C2BD] p-3.5">
+                      <b>{rewards.next.name}</b>
+                      <small className="text-muted">{rewards.next.need - rewards.next.have} more to go</small>
+                      <Bar pct={(rewards.next.have / rewards.next.need) * 100} color="var(--color-melon)" />
+                      <small>
+                        <b>
+                          {rewards.next.have} of {rewards.next.need}
+                        </b>
+                      </small>
+                    </div>
+                  )}
+                </div>
+                <Link href="/student/rewards" className="self-start text-sm font-semibold text-link">
+                  See all rewards
+                </Link>
+              </div>
+            )}
+            {p.moment && (
+              <div className="tile-hover flex min-w-0 flex-col gap-1.5 rounded-3xl bg-[#FFE1E6] p-[22px] text-[#3D0F18] sm:col-span-2 lg:col-span-1">
+                <span className="text-xs font-extrabold uppercase tracking-[.06em]">Biggest moment</span>
+                <span className="text-[22px] font-extrabold leading-[1.15] tracking-tight">
+                  {p.moment ? p.moment.title : "Your big moment is coming"}
+                </span>
+                <p className="text-[13px] font-semibold">{p.moment ? shortDate(p.moment.when) : "The Career Fair is a great place for one."}</p>
+                <Link href="/student/rewards" className="mt-auto self-start rounded-full border border-[#3D0F18] px-4 py-2 text-sm font-bold">
+                  Add a photo (optional)
+                </Link>
+              </div>
+            )}
           </div>
-          <div className="flex min-w-0 flex-col gap-1.5 rounded-3xl bg-[#FFE1E6] p-[22px] text-[#3D0F18] [grid-area:moment]">
-            <span className="text-xs font-extrabold uppercase tracking-[.06em]">Biggest moment</span>
-            <span className="text-[22px] font-extrabold leading-[1.15] tracking-tight">{p.moment ? p.moment.title : "Your big moment is coming"}</span>
-            <p className="text-[13px] font-semibold">{p.moment ? shortDate(p.moment.when) : "The Career Fair is a great place for one."}</p>
-            <Link href="/student/rewards" className="mt-auto self-start rounded-full border border-[#3D0F18] px-4 py-2 text-sm font-bold">
-              Add a photo (optional)
-            </Link>
-          </div>
-        </div>
-      </section>
+        </section>
+      )}
     </main>
   );
 }
 
 function Tile({ area, bg, fg, label, children }: { area: string; bg: string; fg: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-3xl p-[22px] text-[13px] font-semibold" style={{ gridArea: area, background: bg, color: fg }}>
+    <div
+      className={`tile-hover flex min-w-0 flex-col gap-1.5 overflow-hidden rounded-3xl p-[22px] text-[13px] font-semibold ${area === "streak" ? "sm:col-span-2" : ""}`}
+      style={{ background: bg, color: fg }}
+    >
       <span className="text-xs font-extrabold uppercase tracking-[.06em]">{label}</span>
       {children}
     </div>
@@ -312,4 +359,3 @@ function roadmapMessage(status: string | undefined, hasTeam: boolean) {
   }
   return "Your advisor or coach will set up your roadmap with you.";
 }
-

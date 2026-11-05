@@ -75,3 +75,23 @@ test("doesn't read a state abbreviation as a degree", () => {
   assert.deepEqual(r.majors, []);
   assert.equal(r.expected_grad_term, "May 2029");
 });
+
+test("reads jobs and projects with their dates, in both common layouts", () => {
+  const r = parseResumeText(`Sam Lee
+EXPERIENCE
+Data Analytics Intern Jun 2025 – Aug 2025
+Hoosier Health Indianapolis, IN
+• Built a dashboard
+Research Assistant Jan 2025 – May 2025
+IU Social Media Lab Bloomington, IN
+PROJECTS
+Bike-Share Demand Model | Python, scikit-learn Jan 2026 – Present
+SKILLS
+Languages: Python`);
+  assert.deepEqual(r.experience, [
+    { title: "Data Analytics Intern", org: "Hoosier Health", start: "Jun 2025", end: "Aug 2025" },
+    { title: "Research Assistant", org: "IU Social Media Lab", start: "Jan 2025", end: "May 2025" },
+    { title: "Bike-Share Demand Model", org: null, start: "Jan 2026", end: "Present" },
+  ]);
+  assert.deepEqual(parseResumeText(RESUME).experience, [{ title: "Data Intern", org: "Acme Corp", start: "June 2026", end: "August 2026" }]);
+});
