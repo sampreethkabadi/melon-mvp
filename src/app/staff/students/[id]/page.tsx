@@ -2,12 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SubmitButton } from "@/components/SubmitButton";
 import { firstName, requireRole } from "@/lib/auth";
+import { MeetingPrepCard } from "@/components/staff/MeetingPrepCard";
+import { appNow, localDate } from "@/lib/clock";
+import { timeOf } from "@/lib/format";
 import { buildBriefing } from "@/lib/sessions/briefing";
+import { loadStudentRows } from "@/lib/staff/load";
 import { ROADMAP_KINDS } from "@/lib/sessions/types";
 import { createClient } from "@/lib/supabase/server";
 import { YEAR_LABEL, type ClassYear } from "@/lib/types";
 import { startSession } from "../../sessions/actions";
-import { addItem, approveRoadmap, dropPath, editItem, setItemApproval } from "../actions";
+import { addItem, approveRoadmap, dropPath, editItem, setItemApproval, suggestAdd, suggestEdit, suggestRemove, withdrawSuggestion } from "../actions";
 
 export const metadata = { title: "Student · Melon" };
 
@@ -23,6 +27,8 @@ const SESSION_STATUS: Record<string, string> = {
 };
 const ITEM_STATUS: Record<string, string> = { done: "Done", queued: "Waiting for a free slot", locked: "Saved for later", paused: "Paused (path unpinned)" };
 const ADVICE_STATUS: Record<string, string> = { new: "Not started", in_progress: "In progress", done: "Done", dismissed: "Dismissed" };
+
+type Suggestion = { id: string; item_id: string | null; action: string; title: string | null; description: string | null; reason: string | null; before: { title?: string } | null; status: string; suggested_by: string | null };
 
 type Item = { id: string; title: string; description: string | null; rationale: string | null; term: string | null; kind: string; status: string; approval: string; path_id: string | null; due_date: string | null; firm: boolean };
 
@@ -41,19 +47,21 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   if (!person) notFound();
   const sp = person.student_profiles as unknown as { class_year: ClassYear | null; program: string | null; majors: string[]; minors: string[]; expected_grad_term: string | null; target_roles: string[]; clubs: string[]; answers: { skills?: string[] }; resume_path: string | null; onboarding_step: string } | null;
 
-  const [{ data: roadmap }, { data: pathRows }, { data: changeRows }, { data: itemRows }, { data: sessions }, { data: adviceRows }, { data: events }, { data: mineRow }] = await Promise.all([
+  const [{ data: roadmap }, { data: pathRows }, { data: changeRows }, { data: itemRows }, { data: sessions }, { data: adviceRows }, { data: events }, { data: mineRow }, { data: suggestionRows }, { data: apptRow }] = await Promise.all([
     supabase.from("roadmaps").select("id, status, version").eq("student_id", id).maybeSingle(),
     supabase.from("roadmap_paths").select("id, name, reason, first_job, status").eq("student_id", id).order("sort"),
     supabase.from("roadmap_changes").select("summary, created_at").eq("student_id", id).order("created_at", { ascending: false }).limit(1),
     supabase.from("roadmap_items").select("id, title, description, rationale, term, kind, status, approval, path_id, due_date, firm").eq("student_id", id).order("sort"),
-    supabase.from("sessions").select("id, status, created_at, session_type, staff:profiles!sessions_staff_id_fkey(full_name), insights(kind, status, payload)").eq("student_id", id).order("created_at", { ascending: false }),
+    supabase.from("sessions").select("id, staff_id, status, created_at, session_type, staff:profiles!sessions_staff_id_fkey(full_name), insights(kind, status, payload)").eq("student_id", id).order("created_at", { ascending: false }),
     supabase.from("advice_items").select("id, text, status, created_at, given_by_person:profiles!advice_items_given_by_fkey(full_name)").eq("student_id", id).order("created_at", { ascending: false }),
     supabase.from("profile_events").select("id, type, payload, source, occurred_at").eq("student_id", id).order("occurred_at", { ascending: false }).limit(25),
     supabase.from("staff_assignments").select("id").eq("student_id", id).eq("staff_id", profile.id).eq("active", true).maybeSingle(),
+    supabase.from("roadmap_suggestions").select("id, item_id, action, title, description, reason, before, status, suggested_by, created_at, decided_at").eq("student_id", id).order("created_at", { ascending: false }).limit(20),
+    appointment ? supabase.from("appointments").select("id, starts_at, type, modality, location, student_id, status").eq("id", appointment).eq("student_id", id).maybeSingle() : Promise.resolve({ data: null }),
   ]);
 
   const items = (itemRows ?? []) as Item[];
-  const sessionList = (sessions ?? []) as unknown as Array<{ id: string; status: string; created_at: string; session_type: string | null; staff: { full_name: string } | null; insights: Array<{ kind: string; status: string; payload: { text: string } }> }>;
+  const sessionList = (sessions ?? []) as unknown as Array<{ id: string; staff_id: string; status: string; created_at: string; session_type: string | null; staff: { full_name: string } | null; insights: Array<{ kind: string; status: string; payload: { text: string } }> }>;
   const advice = (adviceRows ?? []) as unknown as Array<{ id: string; text: string; status: string; given_by_person: { full_name: string } | null }>;
   const eventList = events ?? [];
   const lastReviewed = sessionList.find((s) => s.status === "reviewed");
@@ -76,7 +84,13 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   });
 
   const canAct = Boolean(mineRow) && profile.role !== "admin";
-  const openSession = sessionList.find((s) => !["reviewed", "closed"].includes(s.status));
+  const suggestions = (suggestionRows ?? []) as Suggestion[];
+  const waitingOn = new Map(suggestions.filter((x) => x.status === "pending" && x.item_id).map((x) => [x.item_id!, x]));
+  // What this person has in progress. A session waiting for review doesn't stop the next one starting.
+  const openSession = sessionList.find((s) => s.staff_id === profile.id && !["reviewed", "closed", "ready_for_review"].includes(s.status));
+  const toReview = sessionList.find((s) => s.staff_id === profile.id && s.status === "ready_for_review");
+  const today = localDate(appNow());
+  const prepRow = apptRow ? (await loadStudentRows(supabase, profile.id, [id]))[0] : null;
   const isDraft = roadmap?.status === "draft";
   const paths = (pathRows ?? []).filter((p) => p.status !== "dropped");
   const looseItems = items.filter((i) => !i.path_id || !paths.some((p) => p.id === i.path_id));
@@ -116,6 +130,14 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
             </form>
           ))}
       </div>
+
+      {apptRow && prepRow && <MeetingPrepCard appointment={apptRow} row={prepRow} today={today} open when={timeOf(apptRow.starts_at)} hideLink />}
+
+      {toReview && (
+        <Link href={`/staff/sessions/${toReview.id}`} className="rounded-2xl border-2 bg-warn-bg px-4 py-3 font-bold text-warn-ink" style={{ borderColor: "#F2C14E" }}>
+          A session is waiting for your approval. Review its action items and key points →
+        </Link>
+      )}
 
       <section className="rounded-3xl border-2 bg-white/95 p-6" style={{ borderColor: "var(--school)" }}>
         <h2 className="text-xs font-extrabold uppercase tracking-widest" style={{ color: "var(--school)" }}>
@@ -189,6 +211,30 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
               ) : null}
             </div>
           )}
+          {suggestions.length > 0 && (
+            <SuggestionList studentId={id} suggestions={suggestions} me={profile.id} />
+          )}
+          {canAct && published && (
+            <details className="rounded-2xl bg-soft p-3">
+              <summary className="cursor-pointer text-sm font-bold text-link">Suggest a new step</summary>
+              <form action={suggestAdd.bind(null, id)} className="mt-2 flex flex-col items-start gap-2">
+                <p className="text-sm text-muted">This roadmap is accepted, so {firstName(person.full_name)} decides whether to add it.</p>
+                <input name="title" required aria-label="New step title" placeholder="What should they do?" className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" />
+                <textarea name="description" aria-label="New step details" placeholder="Details (optional)" className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" />
+                <input name="reason" aria-label="Why you suggest it" placeholder="Why? They'll see this." className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" />
+                <div className="flex items-center gap-2">
+                  <select name="kind" defaultValue="coaching" aria-label="Kind of step" className="rounded-xl border border-line bg-white px-2 py-2 text-sm">
+                    {ROADMAP_KINDS.map((k) => (
+                      <option key={k} value={k}>
+                        {k}
+                      </option>
+                    ))}
+                  </select>
+                  <SubmitButton label="Send suggestion" variant="secondary" />
+                </div>
+              </form>
+            </details>
+          )}
           <MaybeCollapsed collapsed={published}>
           {paths.map((path) => (
               <div key={path.id} className="flex flex-col gap-2">
@@ -203,16 +249,16 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
                     </form>
                   )}
                 </div>
-                {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} />)}
+                {items.filter((i) => i.path_id === path.id).map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} waiting={waitingOn.get(item.id)} />)}
               </div>
             ))}
             {looseItems.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h3 className="font-extrabold">Whichever path you take</h3>
-                {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} />)}
+                {looseItems.map((item) => <ItemRow key={item.id} studentId={id} item={item} editable={canAct} locked={published} waiting={waitingOn.get(item.id)} />)}
               </div>
             )}
-            {canAct && roadmap && roadmap.status !== "none" && (
+            {canAct && roadmap && roadmap.status !== "none" && !published && (
               <form action={addItem.bind(null, id, roadmap.id)} className="flex flex-wrap items-end gap-2 rounded-2xl bg-soft p-3">
                 <label className="flex min-w-48 flex-1 flex-col gap-1 text-sm font-semibold">
                   Add an item
@@ -294,8 +340,10 @@ export default async function StudentPage({ params, searchParams }: { params: Pr
   );
 }
 
-function ItemRow({ studentId, item, editable, locked }: { studentId: string; item: Item; editable: boolean; locked: boolean }) {
+function ItemRow({ studentId, item, editable, locked, waiting }: { studentId: string; item: Item; editable: boolean; locked: boolean; waiting?: Suggestion }) {
   const rejected = item.approval === "rejected";
+  // A removed step on an accepted roadmap is history, so there's nothing left to do with it.
+  const actions = editable && !(locked && rejected);
   return (
     <div className={`rounded-2xl border border-line p-3 ${rejected ? "bg-soft" : "bg-white"}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -307,13 +355,14 @@ function ItemRow({ studentId, item, editable, locked }: { studentId: string; ite
           </p>
           {item.rationale && !rejected && <p className="mt-1 text-sm text-ink-2">Why: {item.rationale}</p>}
         </div>
-        {editable && (item.approval !== "approved" || !locked) && (
+        {actions && !locked && (
           <form action={setItemApproval.bind(null, studentId, item.id, rejected ? "pending" : "rejected")}>
             <SubmitButton label={rejected ? "Restore" : "Remove"} variant="link" />
           </form>
         )}
       </div>
-      {editable && !rejected && (
+      {waiting && <p className="mt-1 text-sm font-semibold text-new-ink">Your suggestion is waiting for an answer.</p>}
+      {actions && !rejected && !locked && (
         <details className="mt-1">
           <summary className="cursor-pointer text-sm font-semibold text-link">Edit</summary>
           <form action={editItem.bind(null, studentId, item.id)} className="mt-2 flex flex-col items-start gap-2">
@@ -323,6 +372,51 @@ function ItemRow({ studentId, item, editable, locked }: { studentId: string; ite
           </form>
         </details>
       )}
+      {actions && !rejected && locked && !waiting && (
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
+          <details className="w-full">
+            <summary className="cursor-pointer text-sm font-semibold text-link">Suggest a change</summary>
+            <form action={suggestEdit.bind(null, studentId, item.id)} className="mt-2 flex flex-col items-start gap-2">
+              <input name="title" defaultValue={item.title} required aria-label="Suggested title" className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
+              <textarea name="description" defaultValue={item.description ?? ""} aria-label="Suggested description" className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
+              <input name="reason" aria-label="Why you suggest this change" placeholder="Why? They'll see this." className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
+              <SubmitButton label="Send suggestion" variant="secondary" />
+            </form>
+          </details>
+          <details className="w-full">
+            <summary className="cursor-pointer text-sm font-semibold text-link">Suggest removing</summary>
+            <form action={suggestRemove.bind(null, studentId, item.id)} className="mt-2 flex flex-col items-start gap-2">
+              <input name="reason" aria-label="Why you suggest removing it" placeholder="Why? They'll see this." className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
+              <SubmitButton label="Send suggestion" variant="secondary" />
+            </form>
+          </details>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const SUGGESTION_STATUS: Record<string, string> = { pending: "Waiting for an answer", accepted: "Accepted", declined: "Declined", withdrawn: "Withdrawn" };
+
+function SuggestionList({ studentId, suggestions, me }: { studentId: string; suggestions: Suggestion[]; me: string }) {
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border border-new/40 bg-new-bg/50 p-3">
+      <h3 className="text-sm font-extrabold text-new-ink">Suggestions</h3>
+      <ul className="flex flex-col gap-1.5">
+        {suggestions.slice(0, 6).map((x) => (
+          <li key={x.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 text-sm">
+            <span className="min-w-0">
+              <b>{x.action === "add" ? "Add" : x.action === "edit" ? "Change" : "Remove"}:</b> {x.title ?? x.before?.title}
+              <span className="ml-1 text-xs text-muted">· {SUGGESTION_STATUS[x.status]}</span>
+            </span>
+            {x.status === "pending" && x.suggested_by === me && (
+              <form action={withdrawSuggestion.bind(null, studentId, x.id)}>
+                <SubmitButton label="Withdraw" variant="link" />
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -332,7 +426,7 @@ function MaybeCollapsed({ collapsed, children }: { collapsed: boolean; children:
   if (!collapsed) return <div className="flex flex-col gap-4">{children}</div>;
   return (
     <details className="rounded-2xl border border-line p-3">
-      <summary className="cursor-pointer text-sm font-bold text-link">See the full roadmap</summary>
+      <summary className="cursor-pointer text-sm font-bold text-link">See the full roadmap and suggest changes</summary>
       <div className="mt-3 flex flex-col gap-4">{children}</div>
     </details>
   );
@@ -358,6 +452,7 @@ const EVENT_LABEL: Record<string, string> = {
   roadmap_published: "Roadmap published",
   roadmap_approved: "Roadmap approved and sent to the student",
   roadmap_accepted: "Student accepted the roadmap",
+  suggestion_accepted: "Accepted a suggestion",
   session_goal: "Goal",
   session_action: "Action",
   session_course_change: "Course change",

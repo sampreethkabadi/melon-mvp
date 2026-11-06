@@ -4,7 +4,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireRole } from "@/lib/auth";
 import { isSpeechConfigured } from "@/lib/sessions/deepgram";
-import { INSIGHT_LABEL, type InsightKind } from "@/lib/sessions/types";
+import type { InsightKind } from "@/lib/sessions/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -12,14 +12,13 @@ import {
   chooseNotesOnly,
   resolveFlag,
   correctSegment,
-  editInsight,
   giveStaffConsent,
   pasteTranscript,
   retryProcessing,
-  reviewInsight,
   saveNotes,
   runSampleConversation,
 } from "../actions";
+import { ReviewGroups } from "../ReviewGroups";
 import { Recorder } from "./Recorder";
 
 export const metadata = { title: "Session · Melon" };
@@ -232,13 +231,11 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </div>
             )}
             {insights.length === 0 && <p className="text-sm text-muted">Melon found nothing to suggest from this transcript.</p>}
-            {insights.map((insight) => (
-              <InsightCard key={insight.id} sessionId={id} insight={insight} segments={segments} editable={status === "ready_for_review" && mine} />
-            ))}
+            <ReviewGroups sessionId={id} insights={insights} segments={segments} editable={status === "ready_for_review" && mine} linkLines="#line-" />
             {status === "ready_for_review" && mine && (
               <form action={approveSession.bind(null, id)} className="flex flex-col gap-1.5">
-                <SubmitButton label={`Looks good · send to ${studentName.split(" ")[0]}`} />
-                <span className="text-xs text-muted">Remove anything that&apos;s wrong first. Everything else is approved together.</span>
+                <SubmitButton label={`Approve the rest · send to ${studentName.split(" ")[0]}`} />
+                <span className="text-xs text-muted">Remove anything that&apos;s wrong first. Whatever you haven&apos;t decided on is approved with this click.</span>
               </form>
             )}
             {status === "reviewed" && (
@@ -268,54 +265,5 @@ function Line({ segment }: { segment: Segment }) {
       <b className={segment.speaker === "student" ? "text-link" : "text-ink"}>{segment.speaker === "staff" ? "Staff" : segment.speaker === "student" ? "Student" : "Unknown"}: </b>
       {segment.text}
     </span>
-  );
-}
-
-function InsightCard({ sessionId, insight, segments, editable }: { sessionId: string; insight: Insight; segments: Segment[]; editable: boolean }) {
-  const evidence = insight.insight_evidence.map((e) => segments.find((s) => s.id === e.segment_id)).filter((s): s is Segment => Boolean(s)).sort((a, b) => a.idx - b.idx);
-  const removed = insight.status === "rejected";
-  const tone =
-    insight.kind === "action" || insight.kind === "course_change"
-      ? "border-done/40 bg-done-bg/50"
-      : insight.kind === "advice"
-        ? "border-new/40 bg-new-bg/60"
-        : insight.kind === "concern"
-          ? "border-line bg-soft"
-          : "border-line bg-white";
-  return (
-    <article className={`flex flex-col gap-1.5 rounded-2xl border p-3.5 ${removed ? "border-line bg-soft opacity-70" : tone}`}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-extrabold uppercase tracking-widest text-muted">
-          {INSIGHT_LABEL[insight.kind]}
-          {insight.kind === "concern" ? " · only staff see this" : ""}
-        </span>
-        {removed ? <span className="text-xs font-bold text-ink-2">Removed</span> : insight.status === "edited" ? <span className="text-xs font-bold text-ink-2">Edited</span> : null}
-      </div>
-      <p className={removed ? "text-muted line-through" : ""}>{insight.payload.text}</p>
-      <p className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
-        Evidence:
-        {evidence.map((s) => (
-          <a key={s.id} href={`#line-${s.id}`} className="font-semibold text-link">
-            line {s.idx + 1}
-          </a>
-        ))}
-      </p>
-      {editable && (
-        <div className="flex flex-wrap items-center gap-3">
-          <form action={reviewInsight.bind(null, sessionId, insight.id, removed ? "proposed" : "rejected")}>
-            <SubmitButton label={removed ? "Undo" : "Remove"} variant="link" />
-          </form>
-          {!removed && (
-            <details className="w-full">
-              <summary className="cursor-pointer text-sm font-semibold text-link">Edit</summary>
-              <form action={editInsight.bind(null, sessionId, insight.id)} className="mt-2 flex flex-col items-start gap-2">
-                <textarea name="text" defaultValue={insight.payload.text} aria-label="Edit suggestion" className="w-full rounded-xl border border-line px-3 py-2 text-sm" />
-                <SubmitButton label="Save" variant="secondary" />
-              </form>
-            </details>
-          )}
-        </div>
-      )}
-    </article>
   );
 }

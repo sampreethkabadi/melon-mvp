@@ -15,6 +15,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3 (rest) | Student app: home, action items, sessions, rewards, resources, notifications | ✅ |
 | 3b | Feedback round: fewer steps, one-click approval, pins by year, session types, highlights and flags, demo date | ✅ |
 | 3c | Both sides accept the roadmap, concerns stay with staff, sign-in by emailed code | ✅ |
+| 4b | Advisor view: suggestions on accepted roadmaps, approval queue, student overview, meeting prep | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -23,7 +24,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -89,6 +90,13 @@ Use two browser windows, or one normal and one private: Rivera in one, Maya in t
 
 Freshmen and sophomores can pin 2 paths and get gentler lists; juniors and up pin 1. With no API keys, all of this still works: the screens say when a conversation is a sample and when suggestions were saved in advance.
 
+## What advisors and coaches get
+
+- **Today:** a card for each meeting with what it's probably about, the student's progress, their background and what's still open. The next meeting opens on its own. It's built from their record, so it needs no AI key.
+- **Students:** everyone at a glance, with progress and what needs a look. Filter, search or sort, and open a row for details.
+- **Reviews:** action items and key points from each session, next to the transcript lines behind them. Approve, edit or remove them one by one, or approve the rest in one click.
+- **Roadmaps:** drafts are edited directly. Once both sides have accepted a roadmap, staff can only suggest adding, changing or removing a step, and the student decides. The database enforces this. Steps approved from a session still go straight on, because they were agreed in the meeting.
+
 ## How new sign-ups get an advisor
 
 New sign-ups go to the advisor with the fewest active students, picked at random on a tie, and to the coach the same way. Admins can move a student under **Advisors**. To change an advisor list, set `role` on their row in `profiles`.
@@ -109,6 +117,7 @@ Enforced in the database, not just the app (see the migration):
 - Students can add library resources to their own roadmap and remove only the steps they added. They can tick steps done but can't queue, pause or approve them. Event photos are private to the student and their advisor or coach.
 - At most 5 open steps this semester and 2 new steps per session. Extra steps wait in line (or are saved for later, which only staff see).
 - Students can flag a highlight; only their advisor or coach can change or close the flag.
+- On an accepted roadmap, staff can only suggest changes, and only the student can accept them.
 - New sign-ups are students; staff roles are set by an admin. Emails from other domains are refused.
 
 ## Run it on your computer (optional)
@@ -144,6 +153,7 @@ psql -f supabase/migrations/0004_branch_tree.sql
 psql -f supabase/migrations/0005_student_tabs.sql
 psql -f supabase/migrations/0006_focus_and_pins.sql
 psql -f supabase/migrations/0007_accept_and_privacy.sql
+psql -f supabase/migrations/0008_advisor_suggestions.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
@@ -151,4 +161,5 @@ psql -f supabase/tests/40_branch_tree.sql
 psql -f supabase/tests/50_student_tabs.sql
 psql -f supabase/tests/60_focus_and_pins.sql
 psql -f supabase/tests/70_accept_and_privacy.sql
+psql -f supabase/tests/80_advisor_suggestions.sql
 ```

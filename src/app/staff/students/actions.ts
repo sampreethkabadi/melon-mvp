@@ -12,7 +12,67 @@ async function staff(studentId: string) {
   const profile = await requireRole(["advisor", "coach"]);
   return { profile, supabase: await createClient(), studentId: Id.parse(studentId) };
 }
-const refresh = (studentId: string) => revalidatePath(`/staff/students/${studentId}`);
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const refresh = (_studentId: string) => revalidatePath("/staff", "layout");
+
+const text = (form: FormData, key: string, max: number) => String(form.get(key) ?? "").trim().slice(0, max);
+
+/** On an accepted roadmap, staff suggest a change and the student decides. */
+export async function suggestAdd(studentId: string, form: FormData) {
+  const { supabase } = await staff(studentId);
+  const title = text(form, "title", 200);
+  if (!title) throw new Error("A step needs a title.");
+  const { error } = await supabase.rpc("suggest_roadmap_change", {
+    p_student: studentId,
+    p_action: "add",
+    p_item: null,
+    p_title: title,
+    p_description: text(form, "description", 1000),
+    p_kind: z.enum(ROADMAP_KINDS).parse(form.get("kind")),
+    p_reason: text(form, "reason", 500),
+  });
+  if (error) throw new Error(error.message);
+  refresh(studentId);
+}
+
+export async function suggestEdit(studentId: string, itemId: string, form: FormData) {
+  const { supabase } = await staff(studentId);
+  const title = text(form, "title", 200);
+  if (!title) throw new Error("A step needs a title.");
+  const { error } = await supabase.rpc("suggest_roadmap_change", {
+    p_student: studentId,
+    p_action: "edit",
+    p_item: Id.parse(itemId),
+    p_title: title,
+    p_description: text(form, "description", 1000),
+    p_kind: null,
+    p_reason: text(form, "reason", 500),
+  });
+  if (error) throw new Error(error.message);
+  refresh(studentId);
+}
+
+export async function suggestRemove(studentId: string, itemId: string, form: FormData) {
+  const { supabase } = await staff(studentId);
+  const { error } = await supabase.rpc("suggest_roadmap_change", {
+    p_student: studentId,
+    p_action: "remove",
+    p_item: Id.parse(itemId),
+    p_title: null,
+    p_description: null,
+    p_kind: null,
+    p_reason: text(form, "reason", 500),
+  });
+  if (error) throw new Error(error.message);
+  refresh(studentId);
+}
+
+export async function withdrawSuggestion(studentId: string, suggestionId: string) {
+  const { supabase } = await staff(studentId);
+  const { error } = await supabase.rpc("withdraw_suggestion", { p_id: Id.parse(suggestionId) });
+  if (error) throw new Error(error.message);
+  refresh(studentId);
+}
 
 export async function editItem(studentId: string, itemId: string, form: FormData) {
   const { supabase } = await staff(studentId);
