@@ -30,7 +30,9 @@ async function ownSession(id: string) {
   return { profile, supabase, session };
 }
 
-const refresh = (id: string) => revalidatePath(`/staff/sessions/${id}`);
+// Sessions show up on Today, Students, Reviews and the session page, so refresh them all.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const refresh = (_id: string) => revalidatePath("/staff", "layout");
 
 export async function startSession(studentId: string, appointmentId: string | null) {
   const profile = await requireRole(["advisor", "coach"]);

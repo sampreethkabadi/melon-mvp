@@ -39,6 +39,15 @@ export async function acceptRoadmap() {
   revalidatePath("/student", "layout");
 }
 
+/** The student decides on a change their advisor or coach suggested. The database applies it. */
+export async function answerSuggestion(id: string, accept: boolean) {
+  await requireRole(["student"]);
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("answer_suggestion", { p_id: Id.parse(id), p_accept: accept });
+  if (error) throw new Error("Couldn't save your answer. Try again.");
+  revalidatePath("/student", "layout");
+}
+
 /** Ticks an item on or off. Anything the item came from in the advice tracker moves with it. */
 export async function setItemDone(itemId: string, done: boolean) {
   const profile = await requireRole(["student"]);

@@ -16,7 +16,7 @@ export const metadata = { title: "Home · Melon" };
 export default async function StudentHome() {
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
-  const [{ data: sp }, { data: team }, data, { data: appt }, { data: summaryRows }, rewards] = await Promise.all([
+  const [{ data: sp }, { data: team }, data, { data: appt }, { data: summaryRows }, rewards, { count: suggestionCount }] = await Promise.all([
     supabase.from("student_profiles").select("onboarding_step").eq("user_id", profile.id).single(),
     supabase
       .from("staff_assignments")
@@ -41,6 +41,7 @@ export default async function StudentHome() {
       .order("created_at", { ascending: false })
       .limit(1),
     rewardsFor(supabase, profile.id),
+    supabase.from("roadmap_suggestions").select("id", { count: "exact", head: true }).eq("student_id", profile.id).eq("status", "pending"),
   ]);
   if (sp && sp.onboarding_step !== "done") redirect("/student/onboarding");
 
@@ -72,6 +73,12 @@ export default async function StudentHome() {
         <Eyebrow school>{[year && YEAR_LABEL[year], majors[0], `week ${sem.week} of ${sem.weeks}`].filter(Boolean).join(" · ")}</Eyebrow>
         <h1 className="mt-1 text-3xl font-extrabold tracking-tight">Hi {firstName(profile.full_name)}, here&apos;s what matters this week.</h1>
       </div>
+
+      {Boolean(suggestionCount) && (
+        <Link href="/student/roadmap" className="rounded-2xl border-2 border-new bg-new-bg px-4 py-3 font-bold text-new-ink">
+          {suggestionCount === 1 ? "Your advisor or coach suggested a change to your roadmap" : `Your advisor or coach suggested ${suggestionCount} changes to your roadmap`}. It&apos;s your call →
+        </Link>
+      )}
 
       <ConsentCard studentId={profile.id} />
 

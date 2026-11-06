@@ -9,7 +9,7 @@ import { currentSemester, weekOf } from "@/lib/roadmap/semester";
 import { alumniFor, focusSteps, KIND_LABEL, loadRoadmap, pathLadders, pinLimit, type Path, type Step } from "@/lib/student-data";
 import { createClient } from "@/lib/supabase/server";
 import { YEAR_LABEL } from "@/lib/types";
-import { acceptRoadmap, addResource, markChangesSeen, setItemDone, setPin } from "../actions";
+import { acceptRoadmap, addResource, answerSuggestion, markChangesSeen, setItemDone, setPin } from "../actions";
 
 export const metadata = { title: "Roadmap · Melon" };
 
@@ -40,7 +40,7 @@ export default async function RoadmapPage() {
     );
   }
 
-  const [{ data: changeRows }, { data: sessionRows }, ladders, alumni, rewards] = await Promise.all([
+  const [{ data: changeRows }, { data: sessionRows }, ladders, alumni, rewards, { data: suggestionRows }] = await Promise.all([
     supabase.from("roadmap_changes").select("id, summary, session_id, seen_at, created_at").eq("student_id", profile.id).order("created_at", { ascending: false }).limit(20),
     supabase
       .from("sessions")
@@ -51,8 +51,15 @@ export default async function RoadmapPage() {
     pathLadders(supabase, pinned, year),
     alumniFor(supabase, pinned),
     rewardsFor(supabase, profile.id),
+    supabase
+      .from("roadmap_suggestions")
+      .select("id, action, title, description, reason, before, by:profiles!roadmap_suggestions_suggested_by_fkey(full_name)")
+      .eq("student_id", profile.id)
+      .eq("status", "pending")
+      .order("created_at"),
   ]);
 
+  const suggestions = (suggestionRows ?? []) as unknown as SuggestionRow[];
   const sem = currentSemester();
   const changes = (changeRows ?? []) as unknown as Change[];
   const unseen = changes.filter((c) => !c.seen_at);
@@ -164,6 +171,7 @@ export default async function RoadmapPage() {
         className="order-1 flex min-w-0 flex-col gap-[18px] rounded-[22px] border-2 bg-white/95 p-5 shadow-[0_14px_40px_rgba(20,33,27,.10)] sm:p-6 lg:order-2"
         style={{ borderColor: "var(--school)" }}
       >
+        {suggestions.length > 0 && <Suggestions suggestions={suggestions} />}
         {unseen.length > 0 && <WhatChanged changes={unseen} newPath={newPaths.find((p) => p.status !== "pinned")} switches={limit === 1 && pinnedCount >= 1} />}
 
         <div>
@@ -418,6 +426,39 @@ function StepCard({ step, pathName, isNew }: { step: Step; pathName?: string; is
         <SubmitButton label="Mark done" variant="secondary" />
       </form>
     </div>
+  );
+}
+
+type SuggestionRow = { id: string; action: string; title: string | null; description: string | null; reason: string | null; before: { title?: string; description?: string | null } | null; by: { full_name: string } | null };
+
+/** Changes staff suggest to an accepted roadmap. Nothing happens unless the student accepts. */
+function Suggestions({ suggestions }: { suggestions: SuggestionRow[] }) {
+  return (
+    <section className="flex flex-col gap-3 rounded-3xl border-2 border-new bg-new-bg p-5">
+      <div>
+        <h2 className="text-lg font-extrabold text-new-ink">{suggestions.length === 1 ? "A suggestion for your roadmap" : `${suggestions.length} suggestions for your roadmap`}</h2>
+        <p className="text-sm text-ink-2">It&apos;s your roadmap, so nothing changes unless you accept.</p>
+      </div>
+      {suggestions.map((x) => (
+        <article key={x.id} className="flex flex-col gap-2 rounded-2xl bg-white p-4">
+          <p className="text-xs font-extrabold uppercase tracking-widest text-muted">
+            {x.action === "add" ? "Add a step" : x.action === "edit" ? "Change a step" : "Remove a step"} · from {x.by?.full_name ?? "your team"}
+          </p>
+          {x.action === "edit" && x.before?.title !== x.title && <p className="text-sm text-muted line-through">{x.before?.title}</p>}
+          <p className={`font-bold ${x.action === "remove" ? "line-through" : ""}`}>{x.action === "remove" ? x.before?.title : x.title}</p>
+          {x.action !== "remove" && x.description && <p className="text-sm text-ink-2">{x.description}</p>}
+          {x.reason && <p className="text-sm text-ink-2">Why: {x.reason}</p>}
+          <div className="flex flex-wrap gap-2">
+            <form action={answerSuggestion.bind(null, x.id, true)}>
+              <SubmitButton label="Accept" variant="secondary" />
+            </form>
+            <form action={answerSuggestion.bind(null, x.id, false)}>
+              <SubmitButton label="No thanks" variant="link" />
+            </form>
+          </div>
+        </article>
+      ))}
+    </section>
   );
 }
 

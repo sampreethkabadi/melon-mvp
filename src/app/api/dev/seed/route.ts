@@ -88,7 +88,7 @@ export async function GET(request: NextRequest) {
 
   // Back to a clean start for every test student, so each rehearsal begins the same way.
   const studentIds = SEED_STUDENTS.map((s) => ids[s.email]);
-  for (const table of ["sessions", "advice_items", "activities", "profile_events", "roadmap_changes", "roadmap_items", "roadmap_paths", "staff_assignments", "appointments", "reward_claims", "student_moments"]) {
+  for (const table of ["roadmap_suggestions", "sessions", "advice_items", "activities", "profile_events", "roadmap_changes", "roadmap_items", "roadmap_paths", "staff_assignments", "appointments", "reward_claims", "student_moments"]) {
     const { error } = await db.from(table).delete().in("student_id", studentIds);
     if (error) return fail(`reset ${table}: ${error.message}`);
   }
@@ -210,6 +210,10 @@ export async function GET(request: NextRequest) {
     .update({ published_at: signedOff, approved_at: signedOff, approved_by: lee, accepted_at: signedOff })
     .eq("student_id", maya);
   if (signErr) return fail(`sign-off: ${signErr.message}`);
+  // A session from yesterday still waiting for Lee's approval, so Reviews has something to show.
+  const yesterday = new Date(`${addDays(today, -1)}T19:00:00Z`).toISOString();
+  const waiting = await seedWaitingSession(db, schoolId, ids["priya@melon.test"], lee, "Course planning", yesterday);
+  if (waiting) return fail(`waiting session: ${waiting}`);
   log.push("Demo history ready");
 
   return NextResponse.json({
@@ -258,6 +262,40 @@ async function seedMayaHistory(db: ReturnType<typeof createAdminClient>, schoolI
   // Old news is already read, so the bell lights up only for what happens in the demo.
   await db.from("notifications").update({ read_at: appNow().toISOString() }).eq("user_id", student);
   return actErr?.message ?? null;
+}
+
+/** A finished session with its suggestions drafted, waiting for the advisor to approve them. Returns an error or null. */
+async function seedWaitingSession(db: ReturnType<typeof createAdminClient>, schoolId: string, student: string, staff: string, type: string, when: string) {
+  const sample = sampleConversation(await sampleForStudent(student, type));
+  const { data: session, error } = await db
+    .from("sessions")
+    .insert({ school_id: schoolId, student_id: student, staff_id: staff, status: "ready_for_review", transcript_source: "sample", session_type: type, started_at: when, ended_at: when, created_at: when })
+    .select("id")
+    .single();
+  if (error || !session) return error?.message ?? "no session";
+  const { data: segments, error: segErr } = await db
+    .from("transcript_segments")
+    .insert(sample.segments.map((s) => ({ ...s, school_id: schoolId, session_id: session.id, student_id: student })))
+    .select("id, idx");
+  if (segErr || !segments) return segErr?.message ?? "no transcript";
+  for (const [n, insight] of sample.insights.entries()) {
+    const { data: row, error: insErr } = await db
+      .from("insights")
+      .insert({
+        school_id: schoolId,
+        session_id: session.id,
+        student_id: student,
+        kind: insight.kind,
+        payload: { text: insight.text, roadmap_kind: insight.roadmap_kind ?? null },
+        model_ref: "saved-sample-v1",
+        created_at: new Date(Date.parse(when) + n * 1000).toISOString(),
+      })
+      .select("id")
+      .single();
+    if (insErr || !row) return insErr?.message ?? "no insight";
+    await db.from("insight_evidence").insert(insight.evidence.map((idx) => ({ insight_id: row.id, segment_id: segments.find((s) => s.idx === idx)!.id })));
+  }
+  return null;
 }
 
 /** One reviewed session in the past, with its transcript and approved highlights. Returns an error or null. */
