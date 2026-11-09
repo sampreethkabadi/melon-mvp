@@ -12,8 +12,9 @@ import { addResource, removeStep, setItemDone } from "../../actions";
 
 export const metadata = { title: "Action item · Melon" };
 
-export default async function StepPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function StepPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; open?: string }> }) {
   const { id } = await params;
+  const back = await searchParams;
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
   const { interests, paths, steps, year } = await loadRoadmap(supabase, profile.id);
@@ -43,7 +44,9 @@ export default async function StepPage({ params }: { params: Promise<{ id: strin
   const origin = from
     ? `${from.staff?.full_name ?? "Your coach"} added this after your ${from.session_type?.toLowerCase() ?? "session"} on ${shortDate(from.created_at)}.`
     : step.source === "student"
-      ? "You added this from your resources."
+      ? step.resource_id
+        ? "You added this from your resources."
+        : "You added this yourself."
       : "Part of your first roadmap, checked by your advisor or coach.";
   const done = step.status === "done";
 
@@ -51,10 +54,18 @@ export default async function StepPage({ params }: { params: Promise<{ id: strin
     <main className="relative mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 sm:px-6">
       <Backdrop interests={interests} />
       <p className="text-sm text-muted">
-        <Link href="/student/tasks" className="font-semibold text-link">
-          Action items
-        </Link>{" "}
-        / {step.title}
+        {back.from === "road" ? (
+          <Link href={`/student/roadmap?${new URLSearchParams({ ...(back.open ? { open: back.open } : {}), task: step.id })}`} className="font-semibold text-link">
+            ← Back to your road
+          </Link>
+        ) : (
+          <>
+            <Link href="/student/tasks" className="font-semibold text-link">
+              Action items
+            </Link>{" "}
+            / {step.title}
+          </>
+        )}
       </p>
       <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1.9fr)_minmax(0,1fr)]">
         <Panel className="gap-5 sm:p-7">
@@ -69,6 +80,16 @@ export default async function StepPage({ params }: { params: Promise<{ id: strin
             <h1 className="text-[26px] font-extrabold leading-tight tracking-tight sm:text-[32px]">{step.title}</h1>
             <p className="mt-1.5 max-w-[62ch] text-ink-2">{origin}</p>
           </div>
+          {(step.outcomes ?? []).length > 0 && (
+            <div className="rounded-2xl bg-done-bg px-4 py-3">
+              <Eyebrow>{done ? "What you got out of it" : "What you'll get out of it"}</Eyebrow>
+              <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5 text-sm text-ink-2">
+                {(step.outcomes ?? []).map((o) => (
+                  <li key={o}>{o}</li>
+                ))}
+              </ul>
+            </div>
+          )}
           {(step.description || step.rationale) && (
             <div className="rounded-2xl bg-soft px-4 py-3">
               <Eyebrow>Why this step</Eyebrow>

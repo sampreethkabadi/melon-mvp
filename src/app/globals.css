@@ -71,3 +71,50 @@ h1, h2, h3 {
 @media (prefers-reduced-motion: reduce) {
   .backdrop-blob { animation: none; transition: none; }
 }
+
+/* ---------------------------------------------------------------- the candy road (Roadmap page) */
+@keyframes road-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes road-leg { 0%, 100% { transform: rotate(20deg); } 50% { transform: rotate(-20deg); } }
+@keyframes road-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+@keyframes road-hop { 0% { transform: translateY(0); } 40% { transform: translateY(-14px); } 100% { transform: translateY(0); } }
+@keyframes road-pulse { 0% { transform: scale(1); opacity: .6; } 100% { transform: scale(1.7); opacity: 0; } }
+@keyframes road-ring { 0% { transform: scale(1); opacity: .9; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes road-plant { 0% { transform: scaleY(0); } 70% { transform: scaleY(1.12); } 100% { transform: scaleY(1); } }
+@keyframes road-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes road-wave { 0%, 100% { transform: skewY(0deg) scaleX(1); } 50% { transform: skewY(-7deg) scaleX(.93); } }
+@keyframes road-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes road-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+@keyframes road-popin { 0% { transform: scale(0); } 70% { transform: scale(1.18); } 100% { transform: scale(1); } }
+@keyframes road-drift { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-16px) rotate(14deg); } }
+@keyframes road-burst { 0% { transform: translate(0, 0) scale(1.3); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) rotate(90deg) scale(.2); opacity: 0; } }
+
+.road-av .road-body { animation: road-hop .5s cubic-bezier(.3, 1.6, .5, 1), road-idle 2.4s ease-in-out .5s infinite; }
+.road-av.walking .road-body { animation: road-bob .3s ease-in-out infinite; }
+.road-av .road-leg1, .road-av .road-leg2 { transform-box: view-box; }
+.road-av .road-leg1 { transform-origin: 24px 54px; }
+.road-av .road-leg2 { transform-origin: 32px 54px; }
+.road-av.walking .road-leg1 { animation: road-leg .3s linear infinite; }
+.road-av.walking .road-leg2 { animation: road-leg .3s linear infinite reverse; }
+.road-pulse { animation: road-pulse 1.8s ease-out infinite; }
+.road-ring { animation: road-ring 1.1s ease-out 3; }
+.road-plant { animation: road-plant .5s cubic-bezier(.3, 1.5, .5, 1) both; transform-origin: 10px 50px; }
+.road-fade { animation: road-fade .4s ease-out both; }
+.road-late { animation: road-fade .6s ease-out 1.3s both; }
+.road-pen { transition: transform .15s; }
+.road-flag:hover .road-pen, .road-flag:focus-visible .road-pen { transform: translateY(-4px); }
+.road-wave { animation: road-wave 1.9s ease-in-out infinite; transform-box: view-box; transform-origin: 11.5px 17.5px; }
+.road-flag:hover .road-wave { animation-duration: .6s; }
+.road-goalwave { animation: road-wave 2.2s ease-in-out infinite; transform-box: view-box; transform-origin: 15px 13px; }
+.road-draw { stroke-dasharray: 1; animation: road-draw 1.8s cubic-bezier(.4, 0, .2, 1) both; }
+.road-float { animation: road-float 3.2s ease-in-out infinite; }
+.road-popin { animation: road-popin .55s cubic-bezier(.3, 1.5, .5, 1) both; }
+.road-face { transition: transform .12s; }
+.road-node:hover .road-face, .road-node:focus-visible .road-face { transform: translateY(3px); }
+.road-drift { animation: road-drift 5s ease-in-out infinite; }
+.road-spark { position: absolute; left: 28px; top: 28px; width: 9px; height: 9px; border-radius: 3px; opacity: 0; pointer-events: none; animation: road-burst .85s cubic-bezier(.2, .8, .3, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .road-av .road-body, .road-av.walking .road-leg1, .road-av.walking .road-leg2, .road-pulse, .road-ring, .road-plant, .road-fade, .road-late,
+  .road-wave, .road-goalwave, .road-draw, .road-float, .road-popin, .road-drift { animation: none; }
+  .road-draw { stroke-dasharray: none; }
+  .road-spark, .road-trail { display: none; }
+}

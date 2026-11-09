@@ -42,7 +42,7 @@ export const RESOURCE_COLUMNS = "id, type, title, provider, url, interests, sour
 export async function loadRoadmap(supabase: SupabaseClient, studentId: string) {
   const [{ data: roadmap }, { data: sp }, { data: pathRows }, { data: itemRows }] = await Promise.all([
     supabase.from("roadmaps").select("id, status, published_at").eq("student_id", studentId).maybeSingle(),
-    supabase.from("student_profiles").select("interests, class_year, majors").eq("user_id", studentId).maybeSingle(),
+    supabase.from("student_profiles").select("interests, class_year, majors, expected_grad_term").eq("user_id", studentId).maybeSingle(),
     supabase
       .from("roadmap_paths")
       .select("id, name, reason, first_job, status, interest, created_from_session, created_at")
@@ -50,7 +50,7 @@ export async function loadRoadmap(supabase: SupabaseClient, studentId: string) {
       .order("sort"),
     supabase
       .from("roadmap_items")
-      .select("id, title, description, rationale, term, kind, status, source, path_id, due_date, firm, sort, resource_id, evidence, completed_at, created_at")
+      .select("id, title, description, rationale, term, kind, status, source, path_id, due_date, firm, sort, resource_id, evidence, completed_at, created_at, outcomes")
       .eq("student_id", studentId)
       .order("sort"),
   ]);
@@ -59,6 +59,7 @@ export async function loadRoadmap(supabase: SupabaseClient, studentId: string) {
     roadmap: roadmap as { id: string; status: string; published_at: string | null } | null,
     year: (sp?.class_year ?? null) as ClassYear | null,
     majors: (sp?.majors ?? []) as string[],
+    gradTerm: (sp?.expected_grad_term ?? null) as string | null,
     interests: (sp?.interests ?? []) as string[],
     paths,
     pinned: paths.filter((p) => p.status === "pinned"),
