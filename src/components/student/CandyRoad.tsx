@@ -38,12 +38,8 @@ type Props = {
 
 type Stop = { type: "rest" } | { type: "goal" } | { type: "fork" } | { type: "node"; k: number } | { type: "item"; k: number; j: number };
 
-const AVATARS = [
-  { name: "Grad cap", hoodie: "#2f8f5b", hat: "cap" },
-  { name: "Top bun", hoodie: "#8b7cf6", hat: "bun" },
-  { name: "Beanie", hoodie: "#5ab8e6", hat: "beanie" },
-  { name: "Headphones", hoodie: "#990000", hat: "phones" },
-] as const;
+// Everyone walks the road as the same little grad-cap student.
+
 
 const WIN_KINDS = [
   { id: "event", label: "Event" },
@@ -73,7 +69,6 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
   const [draft, setDraft] = useState({ title: "", kind: "event", outcome: "" });
   const [formError, setFormError] = useState<string | null>(null);
   const [hl, setHl] = useState<string | null>(highlight);
-  const [avatar, setAvatar] = useState(0);
   const [burst, setBurst] = useState(0);
   const [pinError, setPinError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -121,20 +116,6 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-
-  // ---- the avatar the student picked, remembered on this device
-  useEffect(() => {
-    try {
-      const v = Number(window.localStorage.getItem("melon.avatar"));
-      if (v >= 0 && v < AVATARS.length) setAvatar(v);
-    } catch {}
-  }, []);
-  const pickAvatar = (i: number) => {
-    setAvatar(i);
-    try {
-      window.localStorage.setItem("melon.avatar", String(i));
-    } catch {}
-  };
 
   // ---- coming back from an action item: show that flag and ring it
   useEffect(() => {
@@ -355,24 +336,6 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
           <button type="button" onClick={toggleAll} className="mt-1 rounded-full border-2 border-ink bg-white px-3.5 py-1.5 text-[13px] font-bold transition-transform hover:-translate-y-0.5">
             {anyClosed ? "Open every semester" : "Close all but this semester"}
           </button>
-        </div>
-        <div className="flex flex-col items-end gap-2">
-          <span className="text-xs font-semibold text-muted">Pick your student</span>
-          <div className="flex gap-2">
-            {AVATARS.map((a, i) => (
-              <button
-                key={a.name}
-                type="button"
-                aria-label={`${a.name} student`}
-                aria-pressed={avatar === i}
-                onClick={() => pickAvatar(i)}
-                className="flex size-[52px] items-center justify-center rounded-2xl border-2 bg-white transition-transform hover:-translate-y-0.5"
-                style={{ borderColor: avatar === i ? "var(--color-ink)" : "var(--color-line)" }}
-              >
-                <StudentSvg avatar={i} size={40} />
-              </button>
-            ))}
-          </div>
         </div>
       </div>
 
@@ -650,7 +613,7 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
           ))}
           <div ref={avRef} aria-hidden="true" className="road-av pointer-events-none absolute left-0 top-0 h-[66px] w-14" style={{ transform: `translate(${road.S[road.rest].x - 28}px, ${road.S[road.rest].y - 62}px)` }}>
             <div ref={faceRef}>
-              <StudentSvg avatar={avatar} size={56} legs />
+              <StudentSvg size={56} legs />
             </div>
           </div>
 
@@ -795,8 +758,7 @@ function zoneTops(road: Road, n: number) {
   return tops;
 }
 
-function StudentSvg({ avatar, size, legs }: { avatar: number; size: number; legs?: boolean }) {
-  const a = AVATARS[avatar] ?? AVATARS[0];
+function StudentSvg({ size, legs }: { size: number; legs?: boolean }) {
   return (
     <svg width={size} height={(size * 66) / 56} viewBox="0 0 56 66" aria-hidden="true">
       {legs && (
@@ -808,36 +770,13 @@ function StudentSvg({ avatar, size, legs }: { avatar: number; size: number; legs
       )}
       <g className="road-body">
         <rect x={13} y={32} width={10} height={16} rx={3} fill="var(--color-lime)" stroke="var(--color-ink)" strokeWidth={2} />
-        <path d="M17 54 Q17 33 28 33 Q39 33 39 54 Z" fill={a.hoodie} stroke="var(--color-ink)" strokeWidth={2} />
+        <path d="M17 54 Q17 33 28 33 Q39 33 39 54 Z" fill="var(--color-done)" stroke="var(--color-ink)" strokeWidth={2} />
         <circle cx={28} cy={21} r={12} fill="#fff" stroke="var(--color-ink)" strokeWidth={2} />
         <circle cx={24} cy={21} r={1.7} fill="var(--color-ink)" />
         <circle cx={32} cy={21} r={1.7} fill="var(--color-ink)" />
         <path d="M24 26 Q28 29 32 26" fill="none" stroke="var(--color-ink)" strokeWidth={1.6} strokeLinecap="round" />
-        {a.hat === "cap" && (
-          <>
-            <polygon points="13,11 28,4 43,11 28,17" fill="var(--color-ink)" />
-            <path d="M41 11 L41 19" stroke="var(--color-lime)" strokeWidth={2} />
-          </>
-        )}
-        {a.hat === "bun" && (
-          <>
-            <circle cx={28} cy={6} r={5} fill="var(--color-ink)" />
-            <path d="M16 19 Q17 9 28 9 Q39 9 40 19 Q34 13 28 14 Q21 13 16 19 Z" fill="var(--color-ink)" />
-          </>
-        )}
-        {a.hat === "beanie" && (
-          <>
-            <path d="M15 18 Q15 5 28 5 Q41 5 41 18 Z" fill="#990000" stroke="var(--color-ink)" strokeWidth={2} />
-            <circle cx={28} cy={4} r={3} fill="#fff" stroke="var(--color-ink)" strokeWidth={1.5} />
-          </>
-        )}
-        {a.hat === "phones" && (
-          <>
-            <path d="M14 22 Q14 6 28 6 Q42 6 42 22" fill="none" stroke="var(--color-ink)" strokeWidth={3} />
-            <rect x={11} y={18} width={6} height={9} rx={2} fill="#8b7cf6" stroke="var(--color-ink)" strokeWidth={1.5} />
-            <rect x={39} y={18} width={6} height={9} rx={2} fill="#8b7cf6" stroke="var(--color-ink)" strokeWidth={1.5} />
-          </>
-        )}
+        <polygon points="13,11 28,4 43,11 28,17" fill="var(--color-ink)" />
+        <path d="M41 11 L41 19" stroke="var(--color-lime)" strokeWidth={2} />
       </g>
     </svg>
   );
