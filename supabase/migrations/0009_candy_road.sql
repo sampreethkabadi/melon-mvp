@@ -1,10 +1,15 @@
 -- Melon MVP: the candy road. Run this once, after 0008, in Supabase > SQL Editor > New query.
 --
 -- 1. Each step can say what the student got out of it ("outcomes"). The road shows it when you hover a flag.
--- 2. Students can add something they already did, outside Melon (a club, a job, a hackathon). It goes on
---    their road as done and marked "added by you". They can't backdate it into a future semester.
+-- 2. Only milestones go on the road: things you finished that you'd put on a resume. The app decides from the
+--    step's kind and title; "milestone" overrides that per step (null = let the app decide), and "road_title"
+--    is an optional short, past-tense name for the flag ("Went to the Fall Career Fair").
+-- 3. Students can add something they already did, outside Melon (a club, a job, a hackathon). It goes on
+--    their road as a done milestone marked "added by you". They can't backdate it into a future semester.
 
 alter table public.roadmap_items add column if not exists outcomes text[] not null default '{}';
+alter table public.roadmap_items add column if not exists milestone boolean;
+alter table public.roadmap_items add column if not exists road_title text check (road_title is null or length(road_title) <= 80);
 
 create or replace function public.log_win(p_term text, p_title text, p_kind text default 'experience', p_outcome text default null)
 returns uuid
@@ -35,10 +40,10 @@ begin
     when p_term = public.current_term() then public.app_now()
     when p_term like 'Spring %' then make_timestamptz(split_part(p_term, ' ', 2)::int, 4, 15, 16, 0, 0, 'UTC')
     else make_timestamptz(split_part(p_term, ' ', 2)::int, 11, 15, 17, 0, 0, 'UTC') end;
-  insert into public.roadmap_items (school_id, roadmap_id, student_id, term, kind, title, outcomes, status, source, approval, sort, completed_at)
+  insert into public.roadmap_items (school_id, roadmap_id, student_id, term, kind, title, outcomes, milestone, status, source, approval, sort, completed_at)
   values (v_school, v_roadmap, v_student, p_term, p_kind, v_title,
           case when v_outcome is null then '{}'::text[] else array[v_outcome] end,
-          'done', 'student', 'not_needed', 950, v_done)
+          true, 'done', 'student', 'not_needed', 950, v_done)
   returning id into v_id;
   return v_id;
 end

@@ -50,7 +50,7 @@ export async function loadRoadmap(supabase: SupabaseClient, studentId: string) {
       .order("sort"),
     supabase
       .from("roadmap_items")
-      .select("id, title, description, rationale, term, kind, status, source, path_id, due_date, firm, sort, resource_id, evidence, completed_at, created_at, outcomes")
+      .select("id, title, description, rationale, term, kind, status, source, path_id, due_date, firm, sort, resource_id, evidence, completed_at, created_at, outcomes, milestone, road_title")
       .eq("student_id", studentId)
       .order("sort"),
   ]);

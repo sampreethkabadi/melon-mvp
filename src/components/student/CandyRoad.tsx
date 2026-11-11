@@ -94,6 +94,9 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
     extra.push(road.fork.x >= ROAD_X.mid ? { x: road.fork.x + 44, y: road.fork.y - 96, w: 270, h: 88 } : { x: road.fork.x - 44 - 270, y: road.fork.y - 96, w: 270, h: 88 });
     road.spurEnds.forEach((e) => extra.push(e.x > road.fork.x ? { x: e.x - 14, y: e.y - 54, w: 300, h: 76 } : { x: e.x - 290, y: e.y - 54, w: 304, h: 76 }));
     extra.push({ x: road.goal.x - 110, y: road.goal.y - 54, w: 220, h: 120 });
+    // Where the student stands by default, so no label sits behind them.
+    const at = road.S[road.rest];
+    extra.push({ x: at.x - 34, y: at.y - 100, w: 68, h: 104 });
     zoneTops(road, n).forEach((t) => extra.push({ x: 12, y: t + 10, w: 250, h: 46 }));
     const flags: Array<{ at: { x: number; y: number }; title: string; sub: string }> = [];
     semesters.forEach((s, k) => {

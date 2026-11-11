@@ -11,8 +11,8 @@ set request.jwt.claim.sub = :'leo';
 \echo '-- Leo adds a club he joined this semester and a job from last year (expect t, t):'
 select public.log_win(public.current_term(), 'Joined the robotics club', 'networking', 'Met two seniors who build drones') is not null;
 select public.log_win('Spring ' || (extract(year from public.app_today())::int - 1), 'Weekend job at the library', 'experience', null) is not null;
-\echo '-- both are done, his own, and the first keeps what he got out of it (expect 2 rows: done | student | 1, done | student | 0):'
-select status, source, cardinality(outcomes) from public.roadmap_items
+\echo '-- both are done milestones, his own, and the first keeps what he got out of it (expect 2 rows: done | student | t | 1, done | student | t | 0):'
+select status, source, milestone, cardinality(outcomes) from public.roadmap_items
 where student_id = :'leo' and title in ('Joined the robotics club', 'Weekend job at the library') order by title;
 \echo '-- the earlier one is dated inside its semester (expect 4):'
 select extract(month from completed_at)::int from public.roadmap_items where title = 'Weekend job at the library';
@@ -21,8 +21,9 @@ select public.log_win('Fall ' || (extract(year from public.app_today())::int + 1
 select public.log_win(public.current_term(), ' ', 'project', null);
 select public.log_win(public.current_term(), 'Took a class', 'course', null);
 select public.log_win(public.current_term(), 'Something', 'party', null);
-\echo '-- Leo still can''t change what he got out of a step after the fact (expect an error):'
+\echo '-- Leo still can''t change what he got out of a step, or whether it counts, after the fact (expect 2 errors):'
 update public.roadmap_items set outcomes = '{edited}' where title = 'Joined the robotics club';
+update public.roadmap_items set milestone = false where title = 'Joined the robotics club';
 
 set request.jwt.claim.sub = :'lee';
 \echo '-- staff can''t log a win as if they were the student (expect an error):'

@@ -88,7 +88,7 @@ export const SEED_COURSES = [
 /**
  * What Maya did in earlier semesters, so her candy road has something to be proud of. Terms count back from
  * the demo year: -2 is her freshman fall, -1 her freshman spring and sophomore fall, 0 her sophomore spring.
- * "student" rows are things she added herself. Courses stay off the road on purpose.
+ * "student" rows are things she added herself. Only milestones: no courses, chores, practice or coffee chats.
  */
 export const SEED_MAYA_WINS: Array<{
   season: "Spring" | "Fall";
@@ -100,9 +100,8 @@ export const SEED_MAYA_WINS: Array<{
   outcomes: string[];
   source: "system" | "student";
 }> = [
-  { season: "Fall", yearOffset: -2, month: 9, kind: "skill", title: "Explore career paths for Luddy majors", description: "Looked into what data analysts, data scientists and software engineers actually do day to day.", outcomes: ["Picked data analyst as the role to test first", "Learned which skills each role needs"], source: "system" },
+  { season: "Fall", yearOffset: -2, month: 10, kind: "event", title: "Go to HackIU, your first hackathon", description: "Spent a weekend at HackIU with two friends from your dorm.", outcomes: ["Built your first app in 24 hours", "Saw what you liked most: the data part"], source: "student" },
   { season: "Fall", yearOffset: -2, month: 9, kind: "networking", title: "Join the Data Science Club", description: "Joined the club and went to the weekly meetups.", outcomes: ["Met students a year or two ahead of you", "Found your first project team"], source: "system" },
-  { season: "Fall", yearOffset: -2, month: 11, kind: "skill", title: "Set up LinkedIn and GitHub", description: "Set up profiles so recruiters and teammates can find your work.", outcomes: ["A profile recruiters can find", "A place to show your projects"], source: "system" },
   { season: "Spring", yearOffset: -1, month: 2, kind: "experience", title: "Research assistant at the Social Media Lab", description: "Helped clean and analyze social media data at the IU Social Media Lab.", outcomes: ["Your first real research experience", "Practiced Python on messy, real data"], source: "student" },
   { season: "Spring", yearOffset: -1, month: 4, kind: "project", title: "Build a small project with real data", description: "Built a small project from start to finish with a real dataset.", outcomes: ["Your first portfolio piece", "Got comfortable with pandas"], source: "system" },
   { season: "Spring", yearOffset: -1, month: 6, kind: "experience", title: "Summer data internship at Hoosier Health", description: "Spent the summer as a data analytics intern at Hoosier Health.", outcomes: ["Built dashboards a real team used", "A strong first line on your resume"], source: "student" },
@@ -110,7 +109,7 @@ export const SEED_MAYA_WINS: Array<{
   { season: "Fall", yearOffset: -1, month: 12, kind: "certification", title: "Earn the Google Data Analytics certificate", description: "Finished the Google Data Analytics certificate online.", outcomes: ["Proof of skills you can link to", "Covered spreadsheets, SQL and Tableau"], source: "system" },
   { season: "Spring", yearOffset: 0, month: 2, kind: "event", title: "Go to the Spring Career Fair", description: "Went to the Spring Career Fair with your first resume.", outcomes: ["Talked to 4 employers", "Learned what recruiters ask sophomores"], source: "system" },
   { season: "Spring", yearOffset: 0, month: 3, kind: "project", title: "Hackathon with the Data Science Club", description: "Built a project in 24 hours with your club team.", outcomes: ["Shipped a working demo", "Practiced teamwork under a deadline"], source: "student" },
-  { season: "Spring", yearOffset: 0, month: 4, kind: "networking", title: "1:1 call with a Luddy alum", description: "Talked with a Luddy alum who works as a data analyst.", outcomes: ["Learned what the job is really like", "A contact who offered to refer you later"], source: "system" },
+  { season: "Fall", yearOffset: 0, month: 8, kind: "experience", title: "Start as a peer mentor for Luddy freshmen", description: "Mentoring four first-year Luddy students through their first semester.", outcomes: ["Your first leadership role", "A story for 'tell me about a time you helped someone'"], source: "student" },
 ];
 
 export const SEED_REWARDS = [

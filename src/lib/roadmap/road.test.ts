@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRoad, gradTermOf, iconFor, labelSize, placeLabels, semestersFor, slotFor } from "./road.ts";
+import { buildRoad, gradTermOf, iconFor, isMilestone, labelSize, placeLabels, semestersFor, slotFor, winTitle } from "./road.ts";
 
 test("a junior graduating May 2028 gets Fall 2024 to Spring 2028", () => {
   const slots = semestersFor("junior", "May 2028", "Fall 2026");
@@ -69,4 +69,39 @@ test("labels never sit on the road, whatever is open", () => {
 test("long titles wrap to two lines inside the label", () => {
   assert.equal(labelSize("Build a dashboard project for your portfolio", "To do").h, 58);
   assert.equal(labelSize("Set up LinkedIn", "Done · Nov 2024").h, 40);
+});
+
+test("milestones are things you finished, not chores, practice or to-dos", () => {
+  const yes: Array<[string, string]> = [
+    ["event", "Go to both days of the Career Fair"],
+    ["event", "Go to HackIU, your first hackathon"],
+    ["networking", "Join the Data Science Club"],
+    ["experience", "Summer data internship at Hoosier Health"],
+    ["project", "Build a small project with real data"],
+    ["certification", "Earn the Google Data Analytics certificate"],
+    ["skill", "Make your first resume with the career center template"],
+    ["skill", "Learn SQL on a Forage job simulation"],
+  ];
+  const no: Array<[string, string]> = [
+    ["event", "Register for the Career Fair in Handshake"],
+    ["event", "Practice at the mock career fair"],
+    ["skill", "Try the free Kaggle SQL lessons"],
+    ["skill", "Update your LinkedIn headline to say what you want"],
+    ["application", "Apply to 3 Data analyst internships before the fair"],
+    ["coaching", "Mock technical interview: SQL and a case"],
+    ["event", "Get your resume reviewed at the pre-fair drop-in"],
+    ["networking", "Coffee chat with an alum"],
+    ["event", "Employer info session"],
+    ["skill", "Set up LinkedIn and GitHub"],
+    ["course", "CSCI-B 365"],
+    ["event", "Build your 30-second pitch at the elevator pitch workshop"],
+  ];
+  yes.forEach(([k, t]) => assert.equal(isMilestone(k, t), true, t));
+  no.forEach(([k, t]) => assert.equal(isMilestone(k, t), false, t));
+});
+
+test("done flags read like wins", () => {
+  assert.equal(winTitle("Go to both days of the Career Fair"), "Went to both days of the Career Fair");
+  assert.equal(winTitle("Make your first resume"), "Made your first resume");
+  assert.equal(winTitle("Research assistant at the Social Media Lab"), "Research assistant at the Social Media Lab");
 });

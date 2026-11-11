@@ -2,12 +2,13 @@ import { INTEREST_COLORS } from "@/components/Backdrop";
 import type { RoadItem, RoadPath, RoadSemester } from "@/components/student/CandyRoad";
 import { shortDate, shortTerm, TZ } from "@/lib/format";
 import { byPlan } from "@/lib/roadmap/focus";
-import { forkAfter, iconFor, semestersFor, slotFor } from "@/lib/roadmap/road";
+import { forkAfter, iconFor, isMilestone, semestersFor, slotFor, winTitle } from "@/lib/roadmap/road";
 import type { Path, Step } from "@/lib/student-data";
 import type { ClassYear } from "@/lib/types";
 
-// Turns the student's steps and paths into what the candy road draws. Courses stay off the road: it's
-// about what students did beyond class. After the fork in junior fall, the road follows the pinned path.
+// Turns the student's steps and paths into what the candy road draws. Only milestones go on the road:
+// things the student finished that they'd put on a resume (see isMilestone). Chores, practice, applying and
+// courses stay in Action items. After the fork in junior fall, the road follows the pinned path.
 
 const SHOWN = new Set(["done", "active", "queued"]);
 const UNDERGRAD_ZONES = ["Explorer", "Tester", "Getting ready", "Job ready"];
@@ -38,7 +39,11 @@ export function buildRoadData(input: {
 
   const buckets: Step[][] = slots.map(() => []);
   for (const s of input.steps) {
-    if (s.kind === "course" || !SHOWN.has(s.status)) continue;
+    if (!SHOWN.has(s.status)) continue;
+    const milestone = s.milestone ?? (s.source === "student" && !s.resource_id ? true : isMilestone(s.kind, s.title));
+    if (!milestone) continue;
+    // Something from the library (a club, an event) counts once it's done, not while it's an idea.
+    if (s.resource_id && s.status !== "done") continue;
     const k = slotFor(slots, s.term, s.completed_at, input.term);
     // Past the fork, the road is the pinned path: steps for other paths wait on their own branch.
     if (k > fork && s.path_id && main && s.path_id !== main.id) continue;
@@ -63,8 +68,8 @@ export function buildRoadData(input: {
       const outcomes = (s.outcomes ?? []).filter(Boolean);
       return {
         id: s.id,
-        label: shorten(s.title),
-        title: s.title,
+        label: shorten(s.road_title ?? (state === "done" ? winTitle(s.title) : s.title)),
+        title: state === "done" ? winTitle(s.title) : s.title,
         icon: iconFor(s.kind, s.title),
         state,
         sub,

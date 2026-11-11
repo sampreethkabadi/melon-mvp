@@ -106,7 +106,7 @@ export function iconFor(kind: string, title: string): string {
   if (/fair/.test(t)) return "tent";
   if (/linkedin|github|portfolio site|headshot/.test(t)) return "link";
   if (/resume|cover letter/.test(t)) return "doc";
-  if (/coffee|alum|mentor|1:1/.test(t)) return "coffee";
+  if (/coffee|alum|1:1/.test(t)) return "coffee";
   if (/club|meetup/.test(t)) return "club";
   if (/research|lab/.test(t)) return "flask";
   if (/hackathon|certificat|award/.test(t)) return "trophy";
@@ -371,3 +371,49 @@ export function placeLabels(road: Road, flags: Array<{ at: Pt; title: string; su
 }
 
 export const ROAD_X = { left: XL, right: XR, mid: (XL + XR) / 2 };
+
+// ---------------------------------------------------------------- what counts as a milestone
+
+// A milestone is something you finished that you'd put on a resume or tell a friend about.
+// Chores, practice, prep, coffee chats, info sessions, applying and courses stay off the road;
+// they live in Action items. A coach can override this per step (roadmap_items.milestone).
+const NOT_MILESTONE =
+  /\b(register|rsvp|sign up|book|schedule|update|edit|headline|headshot|profile|set up|try|practice|mock|reviews?|reviewed|revis\w*|coffee|chats?|call with|calls?|info sessions?|information sessions?|employer sessions?|workshops?|pitch|tutorials?|lessons?|apply|applied|prep\w*|go over|explore|read|watch|plan)\b/i;
+
+export function isMilestone(kind: string, title: string): boolean {
+  if (kind === "course" || kind === "coaching") return false;
+  if (NOT_MILESTONE.test(title)) return false;
+  const t = title.toLowerCase();
+  switch (kind) {
+    case "experience":
+    case "project":
+    case "certification":
+      return true;
+    case "event":
+      return /fair|conference|hackathon|summit|competition|expo|showcase/.test(t);
+    case "networking":
+      return /\bjoin|club|lead|president|officer|board|chapter/.test(t);
+    case "skill":
+      return /first resume|certificat|portfolio|forage|job simulation|published/.test(t);
+    case "application":
+      return /interview|offer/.test(t);
+    default:
+      return false;
+  }
+}
+
+const PAST: Record<string, string> = {
+  go: "Went", join: "Joined", earn: "Earned", build: "Built", finish: "Finished", write: "Wrote", make: "Made",
+  attend: "Attended", land: "Landed", get: "Got", complete: "Completed", present: "Presented", enter: "Entered",
+  lead: "Led", start: "Started", win: "Won", publish: "Published", ship: "Shipped", do: "Did", take: "Took",
+  become: "Became", learn: "Learned", run: "Ran", host: "Hosted", volunteer: "Volunteered", compete: "Competed",
+  give: "Gave", teach: "Taught", create: "Created", launch: "Launched", accept: "Accepted",
+};
+
+/** "Go to the Fall Career Fair" → "Went to the Fall Career Fair", so a done flag reads like a win. */
+export function winTitle(title: string): string {
+  const m = title.match(/^(\w+)(\b.*)$/);
+  if (!m) return title;
+  const past = PAST[m[1].toLowerCase()];
+  return past ? past + m[2] : title;
+}

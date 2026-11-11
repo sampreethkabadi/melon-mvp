@@ -21,6 +21,10 @@ export type Step = {
   created_at: string;
   /** What the student got out of it, shown on the road. Empty until someone writes it. */
   outcomes?: string[] | null;
+  /** Whether it goes on the road. Null: decided from its kind and title (see isMilestone in road.ts). */
+  milestone?: boolean | null;
+  /** A short, past-tense name for its flag, if someone wrote one. */
+  road_title?: string | null;
 };
 
 /** Earlier semesters first, then firm dates, then the soonest due date, then the order they were added. */
