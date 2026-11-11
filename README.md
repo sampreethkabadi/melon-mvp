@@ -17,6 +17,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3c | Both sides accept the roadmap, concerns stay with staff, sign-in by emailed code | ✅ |
 | 4b | Advisor view: suggestions on accepted roadmaps, approval queue, student overview, meeting prep | ✅ |
 | 3d | Candy road: semesters as buttons, flags for what you did, a hover summary, the path fork in junior fall, adding your own wins | ✅ |
+| 3e | Design review: Sessions renamed Appointments, Home as one clickable dashboard, Action items with a Career Fair plan and undo, team avatars, a Profile page, per-job lists, Jake's-style sample resumes | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -81,12 +82,12 @@ A roadmap is final only when both sides agree. The advisor or coach clicks **App
 
 Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
-1. **Maya, Home:** what matters this week on top (next step, next session, closest reward), her semester recap below. **Roadmap:** her candy road. Semesters 1 to 4 are done; tap one to plant its flags (no courses, just what she did), and hover a flag to see what it was about and what she got out of it. Fall '26 is open, with the road forking into her paths right after it. Below the road: 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
+1. **Maya, Home:** one dashboard. Every card opens what it's about and ends with the next thing to do: the Career Fair countdown and her fair steps, her next appointment, skills, career vibe, streak and swag. **Action items:** her fair steps as one numbered plan, then Upcoming and Done this semester. Tick a step: Undo stays for 4 seconds, then it moves to Done. Her avatar (top right) opens **Profile** with her team. **Roadmap:** her candy road. Semesters 1 to 4 are done; tap one to plant its flags (no courses, just what she did), and hover a flag to see what it was about and what she got out of it. Fall '26 is open, with the road forking into her paths right after it. Below the road: 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
 2. **Rivera, Today:** open Maya's briefing (Career fair preparation), then **Start session** and **I agree to record**. **Maya, Home:** **I agree**.
 3. **Rivera:** **Use the sample conversation**. Check the highlights, remove or edit anything wrong, then **Looks good · send to Maya**. One click; nothing else to approve.
-4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 sessions). **Claim it** gives a pickup code.
+4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 appointments). **Claim it** gives a pickup code.
 5. **Maya, Roadmap:** **Switch my pin to this path**. Juniors and up pin one path, so Data analyst pauses its steps, and "Building your path" and **Resources** switch to cybersecurity. Pin Data analyst again and its steps come back.
-6. **Maya, Sessions:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
+6. **Maya, Appointments:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
 7. **Lee, Today:** Maya's **Course planning** session. Advisor samples stay on courses and policy, and their steps are course steps.
 8. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, and the roadmap shows as a short card with the full version one click away.
 

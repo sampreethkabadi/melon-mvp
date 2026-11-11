@@ -14,7 +14,7 @@ type Claim = { reward_id: string; code: string; status: string };
 type Moment = { id: string; storage_path: string; caption: string | null; created_at: string };
 
 const UNIT: Record<string, [string, string]> = {
-  sessions: ["session", "sessions"],
+  sessions: ["appointment", "appointments"],
   events: ["event", "events"],
   streak_weeks: ["week", "weeks"],
 };
@@ -84,7 +84,7 @@ export default async function RewardsPage() {
         <Panel>
           <h2 className="text-lg font-extrabold">How it works</h2>
           {[
-            "Show up: sessions, events, workshops and steps you finish all count.",
+            "Show up: appointments, events, workshops and steps you finish all count.",
             "Hit a milestone and it unlocks right away.",
             "Claim it, then pick it up at the career center. Melon pays for it.",
           ].map((t, i) => (

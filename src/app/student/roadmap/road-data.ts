@@ -93,7 +93,7 @@ export function buildRoadData(input: {
         goal: p.first_job ?? p.name,
         color: color(p),
         ink: "#14211B",
-        tag: isPinned ? "Also pinned" : fresh ? "New · from your last session" : "Explore",
+        tag: isPinned ? "Also pinned" : fresh ? "New · from your last appointment" : "Explore",
         tagBg: isPinned ? "#14211B" : fresh ? "#EDEAFF" : "#FFFFFF",
         tagInk: isPinned ? "#FFFFFF" : fresh ? "#4B3BB3" : "#3A4640",
         action: isPinned ? "pinned" : input.limit === 1 && pinnedCount >= 1 ? "switch" : pinnedCount < input.limit ? "pin" : "full",

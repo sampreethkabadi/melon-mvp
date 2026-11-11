@@ -2,6 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { jobKeyFor, levelFor, type Level } from "@/lib/catalog";
 import { appNow } from "@/lib/clock";
+import { daysUntil, isFairStep, nextFair } from "@/lib/roadmap/fair";
+import { currentSemester } from "@/lib/roadmap/semester";
 import type { ClassYear } from "@/lib/types";
 
 // What the student pages share: their roadmap, paths and steps, and the short "start here" ladder for
@@ -134,3 +136,22 @@ export const RESOURCE_LABEL: Record<string, string> = {
   coaching: "Career center",
   club: "Club · beInvolved",
 };
+
+/**
+ * The next career fair and which of the student's steps get them ready for it. Fair steps come from
+ * their wording, the fair prep appointment they came from, or their date (see isFairStep).
+ */
+export async function loadFairPlan(supabase: SupabaseClient, studentId: string, steps: Step[]) {
+  const today = appNow().toISOString().slice(0, 10);
+  const [{ data: events }, { data: prep }] = await Promise.all([
+    supabase.from("resources").select("title, starts_at").eq("type", "event").ilike("title", "%career fair%").gte("starts_at", today).order("starts_at").limit(10),
+    supabase.from("sessions").select("id").eq("student_id", studentId).ilike("session_type", "%fair%"),
+  ]);
+  const fair = nextFair((events ?? []) as Array<{ title: string; starts_at: string | null }>, today);
+  if (!fair || daysUntil(today, fair.date) > 35) return null;
+  const prepIds = new Set((prep ?? []).map((s) => s.id as string));
+  const sem = currentSemester();
+  const inPlay = (s: Step) => s.kind !== "course" && (s.status === "active" || (s.status === "done" && s.completed_at !== null && new Date(s.completed_at) >= sem.start));
+  const ids = new Set(steps.filter((s) => inPlay(s) && isFairStep(s, fair, prepIds)).map((s) => s.id));
+  return { fair, today, days: daysUntil(today, fair.date), ids, total: ids.size, done: steps.filter((s) => ids.has(s.id) && s.status === "done").length };
+}

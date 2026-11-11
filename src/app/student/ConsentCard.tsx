@@ -32,9 +32,9 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
       <AutoRefresh ms={5000} />
       {!answer ? (
         <>
-          <h2 className="text-lg font-extrabold text-new-ink">{name} would like to record this session</h2>
+          <h2 className="text-lg font-extrabold text-new-ink">{name} would like to record this appointment</h2>
           <p>
-            If you agree, Melon records the audio, makes a transcript, and uses AI to draft notes. {name} checks those notes before anything reaches your profile or roadmap. It&apos;s fine to say no: your session goes ahead the same way, and they&apos;ll take notes instead.
+            If you agree, Melon records the audio, makes a transcript, and uses AI to draft notes. {name} checks those notes before anything reaches your profile or roadmap. It&apos;s fine to say no: your appointment goes ahead the same way, and they&apos;ll take notes instead.
           </p>
           <div className="flex flex-wrap gap-2">
             <form action={answerConsent.bind(null, session.id, true)}>
@@ -47,7 +47,7 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
         </>
       ) : answer.granted ? (
         <>
-          <h2 className="text-lg font-extrabold text-new-ink">You agreed to record this session</h2>
+          <h2 className="text-lg font-extrabold text-new-ink">You agreed to record this appointment</h2>
           <form action={answerConsent.bind(null, session.id, false)}>
             <SubmitButton label="Stop and withdraw my consent" variant="secondary" />
           </form>

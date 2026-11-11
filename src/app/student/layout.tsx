@@ -14,7 +14,7 @@ export default async function StudentLayout({ children }: { children: React.Reac
     .is("read_at", null);
   return (
     <SchoolTheme profile={profile}>
-      <TopBar profile={profile} nav={STUDENT_NAV} bell={{ href: "/student/notifications", unread: count ?? 0 }} />
+      <TopBar profile={profile} nav={STUDENT_NAV} bell={{ href: "/student/notifications", unread: count ?? 0 }} profileHref="/student/profile" />
       {children}
     </SchoolTheme>
   );

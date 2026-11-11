@@ -91,7 +91,7 @@ export async function flagHighlight(insightId: string, form: FormData) {
     .from("insight_flags")
     .insert({ school_id: profile.school_id, insight_id: insight.id, session_id: insight.session_id, student_id: profile.id, note });
   if (error && !error.message.includes("duplicate")) throw new Error("Couldn't send that. Try again.");
-  revalidatePath("/student/sessions");
+  revalidatePath("/student/appointments");
 }
 
 const ITEM_KIND: Record<string, string> = {

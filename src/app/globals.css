@@ -186,3 +186,9 @@ input[type="file"],
   .anim-panel-in, .anim-road-left, .anim-sheet-up, .anim-fade-up, .anim-pop, .anim-pulse { animation: none; }
   .tile-hover, .tile-hover:hover, .tile-hover.is-link:hover { transform: none; transition: none; }
 }
+
+/* The undo window on Action items: a thin bar that empties, then the step moves to Done. */
+@keyframes melon-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

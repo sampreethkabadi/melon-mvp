@@ -152,7 +152,7 @@ export default async function RoadmapPage({ searchParams }: { searchParams: Prom
               ))}
             </div>
           ) : (
-            <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">Everything here is done. Your next session will add more.</p>
+            <p className="rounded-2xl bg-done-bg px-4 py-3 text-sm font-semibold text-done-ink">Everything here is done. Your next appointment will add more.</p>
           )}
           {f.unlocks.length > 0 && (
             <span className="text-sm font-semibold text-muted">
@@ -262,7 +262,7 @@ function StepCard({ step, pathName, isNew }: { step: Step; pathName?: string; is
         <Pill>{KIND_LABEL[step.kind] ?? step.kind}</Pill>
         {step.due_date ? (
           <Pill tone={step.firm ? "firm" : "plain"}>
-            {step.firm ? "Firm · " : "By "}
+            {step.firm ? "" : "By "}
             {shortDate(step.due_date)}
           </Pill>
         ) : null}
@@ -319,7 +319,7 @@ function WhatChanged({ changes, newPath, switches }: { changes: Change[]; newPat
   return (
     <div className="flex flex-col gap-2.5 rounded-[18px] bg-[#1E1B3A] p-[18px] text-white">
       <p className="text-xs font-extrabold uppercase tracking-[.08em] text-[#C4BCFF]">
-        {added.length ? "What changed after your last session" : "Your roadmap is ready"}
+        {added.length ? "What changed after your last appointment" : "Your roadmap is ready"}
       </p>
       {firstPublish && !added.length && <p className="text-sm">Your advisor or coach checked it. These are your first steps.</p>}
       {added.length > 0 && (

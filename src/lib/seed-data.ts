@@ -172,7 +172,7 @@ export const SEED_MAYA_WINS: Array<{
 ];
 
 export const SEED_REWARDS = [
-  { name: "Sticker pack", description: "Have 3 sessions with your advisor or coach", rule: { kind: "sessions", count: 3 }, sort: 1 },
+  { name: "Sticker pack", description: "Have 3 appointments with your advisor or coach", rule: { kind: "sessions", count: 3 }, sort: 1 },
   { name: "Career Fair cap", description: "Go to 3 career events this semester", rule: { kind: "events", count: 3 }, sort: 2 },
   { name: "Melon hoodie", description: "A 6-week streak of doing one thing for your career", rule: { kind: "streak_weeks", count: 6 }, sort: 3 },
 ];
