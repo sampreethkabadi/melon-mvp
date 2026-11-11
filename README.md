@@ -16,6 +16,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3b | Feedback round: fewer steps, one-click approval, pins by year, session types, highlights and flags, demo date | ✅ |
 | 3c | Both sides accept the roadmap, concerns stay with staff, sign-in by emailed code | ✅ |
 | 4b | Advisor view: suggestions on accepted roadmaps, approval queue, student overview, meeting prep | ✅ |
+| 3d | Candy road: semesters as buttons, flags for what you did, a hover summary, the path fork in junior fall, adding your own wins | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -24,7 +25,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql), [`0009_candy_road.sql`](supabase/migrations/0009_candy_road.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -79,7 +80,7 @@ A roadmap is final only when both sides agree. The advisor or coach clicks **App
 
 Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
-1. **Maya, Home:** what matters this week on top (next step, next session, closest reward), her semester recap below. **Roadmap:** 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
+1. **Maya, Home:** what matters this week on top (next step, next session, closest reward), her semester recap below. **Roadmap:** her candy road. Semesters 1 to 4 are done; tap one to plant its flags (no courses, just what she did), and hover a flag to see what it was about and what she got out of it. Fall '26 is open, with the road forking into her paths right after it. Below the road: 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
 2. **Rivera, Today:** open Maya's briefing (Career fair preparation), then **Start session** and **I agree to record**. **Maya, Home:** **I agree**.
 3. **Rivera:** **Use the sample conversation**. Check the highlights, remove or edit anything wrong, then **Looks good · send to Maya**. One click; nothing else to approve.
 4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 sessions). **Claim it** gives a pickup code.
@@ -114,7 +115,7 @@ Enforced in the database, not just the app (see the migration):
 - Recording consent can't be edited or deleted, and only the person themself can give it. Both people must agree before audio is stored.
 - Students can't see AI suggestions until their advisor or coach accepts them. Every suggestion links to the transcript lines behind it, and one with no evidence is dropped.
 - Viewing a transcript is written to the audit log.
-- Students can add library resources to their own roadmap and remove only the steps they added. They can tick steps done but can't queue, pause or approve them. Event photos are private to the student and their advisor or coach.
+- Students can add library resources to their own roadmap and remove only the steps they added. They can also log something they already did (this semester or earlier, never a future one); it shows on their road as done and "added by you", and their advisor and coach can see it. They can tick steps done but can't queue, pause or approve them. Event photos are private to the student and their advisor or coach.
 - At most 5 open steps this semester and 2 new steps per session. Extra steps wait in line (or are saved for later, which only staff see).
 - Students can flag a highlight; only their advisor or coach can change or close the flag.
 - On an accepted roadmap, staff can only suggest changes, and only the student can accept them.
@@ -154,6 +155,7 @@ psql -f supabase/migrations/0005_student_tabs.sql
 psql -f supabase/migrations/0006_focus_and_pins.sql
 psql -f supabase/migrations/0007_accept_and_privacy.sql
 psql -f supabase/migrations/0008_advisor_suggestions.sql
+psql -f supabase/migrations/0009_candy_road.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql
@@ -162,4 +164,5 @@ psql -f supabase/tests/50_student_tabs.sql
 psql -f supabase/tests/60_focus_and_pins.sql
 psql -f supabase/tests/70_accept_and_privacy.sql
 psql -f supabase/tests/80_advisor_suggestions.sql
+psql -f supabase/tests/90_candy_road.sql
 ```

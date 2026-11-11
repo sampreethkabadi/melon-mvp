@@ -19,6 +19,8 @@ export type Step = {
   evidence: Array<{ session_id?: string }> | null;
   completed_at: string | null;
   created_at: string;
+  /** What the student got out of it, shown on the road. Empty until someone writes it. */
+  outcomes?: string[] | null;
 };
 
 /** Earlier semesters first, then firm dates, then the soonest due date, then the order they were added. */

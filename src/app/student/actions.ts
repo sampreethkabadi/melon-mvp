@@ -141,6 +141,33 @@ export async function addResource(resourceId: string) {
   revalidatePath("/student", "layout");
 }
 
+const WinInput = z.object({
+  term: z.string().regex(/^(Spring|Fall) \d{4}$/),
+  title: z.string().trim().min(2).max(80),
+  kind: z.enum(["experience", "skill", "certification", "event", "networking", "project"]),
+  outcome: z.string().trim().max(160).optional(),
+});
+
+/** Something the student already did outside Melon. It goes on their road as done, marked "added by you". */
+export async function logWin(input: { term: string; title: string; kind: string; outcome?: string }): Promise<{ id?: string; error?: string }> {
+  await requireRole(["student"]);
+  const parsed = WinInput.safeParse(input);
+  if (!parsed.success) return { error: "Give it a short name (2 to 80 characters)." };
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("log_win", {
+    p_term: parsed.data.term,
+    p_title: parsed.data.title,
+    p_kind: parsed.data.kind,
+    p_outcome: parsed.data.outcome || null,
+  });
+  if (error) {
+    const known = ["already did", "short name", "under 160", "isn't ready"].some((k) => error.message.includes(k));
+    return { error: known ? error.message : "Couldn't add that. Try again." };
+  }
+  revalidatePath("/student", "layout");
+  return { id: data as string };
+}
+
 /** Takes a step the student added themselves back off the roadmap. Staff steps can't be removed. */
 export async function removeStep(itemId: string) {
   const profile = await requireRole(["student"]);

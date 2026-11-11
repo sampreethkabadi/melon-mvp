@@ -12,6 +12,7 @@ import {
   SEED_COURSES,
   SEED_DONE_ANSWERS,
   SEED_INTEGRATIONS,
+  SEED_MAYA_WINS,
   SEED_REWARDS,
   SEED_SCHOOL,
   SEED_STAFF,
@@ -254,6 +255,28 @@ async function seedMayaHistory(db: ReturnType<typeof createAdminClient>, schoolI
     await db.from("roadmap_items").update({ status: "done", completed_at: doneAt }).eq("id", step.id);
     await db.from("advice_items").update({ status: "done" }).eq("roadmap_item_id", step.id);
   }
+  // Earlier semesters, so her road shows what she's already done.
+  const { data: rm } = await db.from("roadmaps").select("id").eq("student_id", student).single();
+  if (!rm) return "no roadmap";
+  const { error: winErr } = await db.from("roadmap_items").insert(
+    SEED_MAYA_WINS.map((w, i) => ({
+      school_id: schoolId,
+      roadmap_id: rm.id,
+      student_id: student,
+      term: `${w.season} ${year + w.yearOffset}`,
+      kind: w.kind,
+      title: w.title,
+      description: w.description,
+      outcomes: w.outcomes,
+      status: "done",
+      source: w.source,
+      approval: "not_needed",
+      sort: 800 + i,
+      completed_at: new Date(Date.UTC(year + w.yearOffset, w.month - 1, 15, 17)).toISOString(),
+    })),
+  );
+  if (winErr) return winErr.message;
+
   const { error: actErr } = await db.from("activities").insert([
     { school_id: schoolId, student_id: student, kind: "workshop", title: "Resume workshop", minutes: 60, occurred_at: `${year}-02-11T22:00:00Z` },
     { school_id: schoolId, student_id: student, kind: "event", title: "Spring career fair", minutes: 120, occurred_at: `${year}-02-25T17:00:00Z` },
