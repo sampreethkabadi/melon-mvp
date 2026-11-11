@@ -640,7 +640,7 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                 {tipView.it.wins.length > 0 && (
                   <>
                     <span className="mt-1 text-[11px] font-bold uppercase tracking-[.1em] text-muted">
-                      {tipView.it.state === "done" ? "What you got out of it" : "What you'll get out of it"}
+                      {tipView.it.state === "done" ? "What you got out of it" : tipView.it.state === "planned" ? "Tasks for it on Action items" : "What you'll get out of it"}
                     </span>
                     <ul className="flex flex-col gap-1.5">
                       {tipView.it.wins.map((w) => (
