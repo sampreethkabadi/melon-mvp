@@ -20,11 +20,11 @@ test("terms run from the current semester", () => {
   assert.deepEqual(upcomingTerms(new Date("2027-02-01T12:00:00Z"), 2), ["Spring 2027", "Fall 2027"]);
 });
 
-test("every year starts with exactly 3 steps this semester and at most 1 for next", () => {
+test("every year starts with 3 steps this semester (4 career fair tasks for juniors), at most 5 in all", () => {
   for (const class_year of ["freshman", "sophomore", "junior", "senior", "grad"] as const) {
     const r = buildFirstRoadmap(input({ class_year }));
-    assert.equal(thisTerm(r).length, 3, class_year);
-    assert.ok(r.items.length <= 4, class_year);
+    assert.equal(thisTerm(r).length, class_year === "junior" ? 4 : 3, class_year);
+    assert.ok(r.items.length <= 5, class_year);
     for (const i of r.items) {
       assert.ok(i.rationale && i.description && i.term, i.title);
       if (i.path_index !== undefined) assert.ok(i.path_index < r.paths.length, i.title);
@@ -37,7 +37,11 @@ test("fair steps have firm dates before the fair", () => {
   const firm = r.items.filter((i) => i.firm).map((i) => i.due_date);
   assert.deepEqual(firm, ["2026-09-09", "2026-09-10", "2026-09-17"]);
   const junior = buildFirstRoadmap(input({}));
-  assert.ok(junior.items.some((i) => i.title === "Practice at the mock career fair" && i.due_date === "2026-09-14" && i.firm));
+  assert.ok(junior.items.some((i) => i.title === "Register for the Career Fair in Handshake" && i.due_date === "2026-09-15" && i.firm));
+  assert.deepEqual(
+    junior.items.filter((i) => i.term === "Fall 2026").map((i) => i.title),
+    ["Register for the Career Fair in Handshake", "Career fair strategy: pick 5 employers to meet", "Elevator pitch: 30 seconds about you", "Resume review before the fair"],
+  );
 });
 
 test("after the fair, steps don't carry dates that have passed", () => {

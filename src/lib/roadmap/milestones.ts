@@ -41,6 +41,36 @@ export function winLabel(s: StepLike) {
 
 export type PlannedMilestone = { key: string; title: string; when?: string; dated?: boolean; path?: boolean; tasks: string[] };
 
+/** What kind of win a milestone is when the student marks it done (the kinds "Add something you did" allows). */
+export const CLAIM_KIND: Record<string, string> = {
+  resume: "project",
+  club: "networking",
+  lead: "networking",
+  fair: "event",
+  cert: "certification",
+  project: "project",
+  intern: "experience",
+  interview: "experience",
+  offer: "experience",
+};
+
+/** Which of this semester's tasks lead to which milestone. The fair uses isFairStep instead. */
+export const TASK_MATCH: Record<string, RegExp> = {
+  resume: /\bresume\b|linkedin|handshake profile/i,
+  club: /\bclubs?\b|beinvolved|meeting/i,
+  lead: /\bclubs?\b|leadership|run for|officer/i,
+  cert: /certificat/i,
+  project: /\bproject\b|portfolio/i,
+  intern: /intern|references|portfolio|social media audit/i,
+  interview: /job search|interview|full-time|apply to \d+ full-time/i,
+  offer: /\boffers?\b|12twenty|negotiat/i,
+};
+
+/** The milestone in the past tense, for when it's done: "Go to the Fall Career Fair" -> "Went to the Fall Career Fair". */
+export function pastTense(title: string) {
+  return winLabel({ kind: "", title, source: "system", status: "done" });
+}
+
 const FAIR = ["Register for the fair in Handshake", "Career fair strategy", "Elevator pitch", "Resume review"];
 
 /** Planned milestones for each undergrad semester, freshman fall to senior spring. */

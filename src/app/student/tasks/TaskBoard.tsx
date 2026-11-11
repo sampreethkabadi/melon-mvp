@@ -6,8 +6,9 @@ import { Check, Flag, Target, Undo2 } from "lucide-react";
 import { setItemDone } from "../actions";
 
 export type BoardItem = { id: string; title: string; meta: string; date: string | null; fixed: boolean };
-export type DoneItem = { id: string; title: string; when: string };
-export type FairInfo = { title: string; when: string; days: number; total: number; done: number };
+export type DoneItem = { id: string; title: string; when: string; goal?: string };
+/** A milestone and the tasks that lead to it. Dated ones (the career fair) are crimson and count down. */
+export type MilestoneGroup = { key: string; title: string; when: string; dated: boolean; days: number | null; note: string; total: number; done: number; items: BoardItem[] };
 
 const UNDO_MS = 4000;
 
@@ -16,14 +17,12 @@ const UNDO_MS = 4000;
  * in case it was a slip. Then it drops into "Done this semester" and is saved.
  */
 export function TaskBoard({
-  fair,
-  fairItems,
+  groups,
   items,
   done,
   upcoming,
 }: {
-  fair: FairInfo | null;
-  fairItems: BoardItem[];
+  groups: MilestoneGroup[];
   items: BoardItem[];
   done: DoneItem[];
   /** Rendered between this week and done, so the page reads now, next, then what you did. */
@@ -66,7 +65,8 @@ export function TaskBoard({
     timers.current[item.id] = setTimeout(() => {
       pending.current.delete(item.id);
       setState((s) => ({ ...s, [item.id]: "done" }));
-      setJustDone((d) => [{ id: item.id, title: item.title, when: "Just now" }, ...d.filter((x) => x.id !== item.id)]);
+      const goal = groups.find((g) => g.items.some((i) => i.id === item.id))?.title;
+      setJustDone((d) => [{ id: item.id, title: item.title, when: "Just now", goal: goal ? `For: ${goal}` : undefined }, ...d.filter((x) => x.id !== item.id)]);
       save(item.id, true, item.title);
     }, UNDO_MS);
   }
@@ -85,8 +85,9 @@ export function TaskBoard({
   }
 
   const showOpen = (i: BoardItem) => state[i.id] !== "done";
-  const openFair = fairItems.filter(showOpen);
+  const grouped = groups.map((g) => ({ ...g, open: g.items.filter(showOpen), doneNow: g.done + g.items.filter((i) => state[i.id] === "done").length }));
   const openOther = items.filter(showOpen);
+  const allItems = [...groups.flatMap((g) => g.items), ...items];
   const reopened = new Set(
     Object.entries(state)
       .filter(([, v]) => v === "open")
@@ -94,9 +95,8 @@ export function TaskBoard({
   );
   const doneList = [...justDone, ...done.filter((d) => !reopened.has(d.id) && !justDone.some((j) => j.id === d.id))];
   // Steps the student just un-ticked come back to the top of the list until the page refreshes.
-  const back = [...done, ...justDone].filter((d) => reopened.has(d.id) && ![...fairItems, ...items].some((i) => i.id === d.id));
-  const fairDone = fair ? fair.done + fairItems.filter((i) => state[i.id] === "done").length : 0;
-  const openCount = [...openFair, ...openOther].filter((i) => state[i.id] !== "pending").length + back.length;
+  const back = [...done, ...justDone].filter((d) => reopened.has(d.id) && !allItems.some((i) => i.id === d.id));
+  const openCount = [...grouped.flatMap((g) => g.open), ...openOther].filter((i) => state[i.id] !== "pending").length + back.length;
 
   return (
     <>
@@ -106,64 +106,64 @@ export function TaskBoard({
           <span className="rounded-full bg-soft px-3 py-1 text-[13px] font-extrabold text-ink-2">{openCount} open</span>
         </div>
 
-        {fair && (openFair.length > 0 || fairDone > 0) && (
-          <div className="flex flex-col gap-3.5 rounded-[22px] border border-[#F3D3D3] bg-[#FDF3F3] p-3 sm:p-5">
-            <div className="flex items-start gap-3.5">
-              <span
-                className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl text-white sm:size-12"
-                style={{ background: "var(--school)" }}
+        {grouped
+          .filter((g) => g.open.length > 0)
+          .map((g) => {
+            const accent = g.dated ? "var(--school)" : "var(--color-ink)";
+            return (
+              <div
+                key={g.key}
+                className={`flex flex-col gap-3.5 rounded-[22px] border p-3 sm:p-5 ${g.dated ? "border-[#F3D3D3] bg-[#FDF3F3]" : "border-line bg-soft/60"}`}
               >
-                <Target size={24} aria-hidden="true" />
-              </span>
-              <div className="flex min-w-0 flex-1 flex-col gap-1">
-                <b className="text-[19px] leading-tight">Get ready for the Career Fair</b>
-                <span className="text-[13px] text-ink-2 sm:text-sm">
-                  {fair.total} steps that build on each other. Do them in order and you walk in on {fair.when} ready to talk to recruiters.
-                </span>
-              </div>
-              <span className="flex shrink-0 flex-col items-end">
-                <b className="text-[19px]" style={{ color: "var(--school)" }}>
-                  {fairDone} of {fair.total}
-                </b>
-                <span className="text-xs font-bold text-muted">
-                  {fair.days === 0 ? "today" : fair.days === 1 ? "1 day left" : `${fair.days} days left`}
-                </span>
-              </span>
-            </div>
-            <ol className="flex flex-col">
-              {openFair.map((item, i) => (
-                <li key={item.id} className="flex items-stretch gap-2 sm:gap-3">
-                  <div className="flex w-6 shrink-0 flex-col items-center sm:w-7">
-                    <span
-                      className="mt-[13px] inline-flex size-6 shrink-0 sm:size-7 items-center justify-center rounded-full text-[13px] font-extrabold transition-colors duration-300"
-                      style={
-                        state[item.id] === "pending"
-                          ? { background: "var(--color-done)", color: "#fff" }
-                          : { background: "#fff", color: "var(--school)", boxShadow: "inset 0 0 0 2px var(--school)" }
-                      }
-                    >
-                      {state[item.id] === "pending" ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : fair.done + i + 1}
+                <div className="flex items-start gap-3.5">
+                  <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl text-white sm:size-12" style={{ background: accent }}>
+                    {g.dated ? <Target size={24} aria-hidden="true" /> : <Flag size={22} aria-hidden="true" />}
+                  </span>
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-xs font-extrabold uppercase tracking-[.08em]" style={{ color: g.dated ? "var(--school)" : "var(--color-muted)" }}>
+                      Milestone · {g.when}
                     </span>
-                    <span className="w-0.5 flex-1 bg-[#E8C3C3]" />
+                    <b className="text-[19px] leading-tight">{g.title}</b>
+                    <span className="text-[13px] text-ink-2 sm:text-sm">{g.note}</span>
                   </div>
-                  <Row item={item} pending={state[item.id] === "pending"} onTick={() => tick(item)} onUndo={() => undo(item.id)} />
-                </li>
-              ))}
-              <li className="flex items-center gap-2 sm:gap-3">
-                <span
-                  className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-white sm:size-7"
-                  style={{ background: "var(--school)" }}
-                >
-                  <Flag size={14} strokeWidth={2.6} aria-hidden="true" />
-                </span>
-                <b className="text-[15px]" style={{ color: "var(--school)" }}>
-                  {fair.title} · {fair.when}
-                </b>
-              </li>
-            </ol>
-          </div>
-        )}
+                  <span className="flex shrink-0 flex-col items-end">
+                    <b className="text-[19px]" style={{ color: accent }}>
+                      {g.doneNow} of {g.total}
+                    </b>
+                    <span className="text-xs font-bold text-muted">
+                      {g.days === null ? "tasks" : g.days <= 0 ? "today" : g.days === 1 ? "1 day left" : `${g.days} days left`}
+                    </span>
+                  </span>
+                </div>
+                <ol className="flex flex-col">
+                  {g.open.map((item, i) => (
+                    <li key={item.id} className="flex items-stretch gap-2 sm:gap-3">
+                      <div className="flex w-6 shrink-0 flex-col items-center sm:w-7">
+                        <span
+                          className="mt-[13px] inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold transition-colors duration-300 sm:size-7"
+                          style={state[item.id] === "pending" ? { background: "var(--color-done)", color: "#fff" } : { background: "#fff", color: accent, boxShadow: `inset 0 0 0 2px ${accent}` }}
+                        >
+                          {state[item.id] === "pending" ? <Check size={14} strokeWidth={3} aria-hidden="true" /> : g.done + i + 1}
+                        </span>
+                        <span className={`w-0.5 flex-1 ${g.dated ? "bg-[#E8C3C3]" : "bg-line"}`} />
+                      </div>
+                      <Row item={item} pending={state[item.id] === "pending"} onTick={() => tick(item)} onUndo={() => undo(item.id)} />
+                    </li>
+                  ))}
+                  <li className="flex items-center gap-2 sm:gap-3">
+                    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-full text-white sm:size-7" style={{ background: accent }}>
+                      <Flag size={14} strokeWidth={2.6} aria-hidden="true" />
+                    </span>
+                    <b className="text-[15px]" style={{ color: accent }}>
+                      {g.dated ? `${g.title} · ${g.when}` : `${g.title}: mark it done on your road`}
+                    </b>
+                  </li>
+                </ol>
+              </div>
+            );
+          })}
 
+        {(openOther.length > 0 || back.length > 0) && groups.some((g) => g.items.length > 0) && <h3 className="text-[15px] font-extrabold text-ink-2">Also this semester</h3>}
         {(openOther.length > 0 || back.length > 0) && (
           <div className="flex flex-col">
             {back.map((d) => (
@@ -221,7 +221,10 @@ export function TaskBoard({
               >
                 <Check size={15} strokeWidth={3.2} aria-hidden="true" />
               </button>
-              <span className="min-w-0 flex-1 text-[15px] font-bold text-done-ink">{d.title}</span>
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-[15px] font-bold text-done-ink">{d.title}</span>
+                {d.goal && <span className="text-xs font-semibold text-done-ink/80">{d.goal}</span>}
+              </span>
               <span className="shrink-0 text-[13px] font-semibold text-done-ink">{d.when}</span>
             </div>
           ))}
