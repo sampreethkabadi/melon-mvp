@@ -117,6 +117,7 @@ h1, h2, h3 {
   .road-wave, .road-goalwave, .road-draw, .road-float, .road-popin, .road-drift { animation: none; }
   .road-draw { stroke-dasharray: none; }
   .road-spark, .road-trail { display: none; }
+}
 
 /* Everything you can click shows a hand. */
 a[href],
