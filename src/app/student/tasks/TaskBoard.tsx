@@ -17,11 +17,14 @@ const UNDO_MS = 4000;
  * in case it was a slip. Then it drops into "Done this semester" and is saved.
  */
 export function TaskBoard({
+  focus = null,
   groups,
   items,
   done,
   upcoming,
 }: {
+  /** A milestone opened from the road ("See action items"): its group is scrolled to and outlined. */
+  focus?: string | null;
   groups: MilestoneGroup[];
   items: BoardItem[];
   done: DoneItem[];
@@ -34,6 +37,10 @@ export function TaskBoard({
   const [, startTransition] = useTransition();
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const pending = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    if (focus) document.getElementById(`m-${focus}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focus]);
 
   // Leaving the page mid-undo still saves the tick.
   useEffect(() => {
@@ -113,7 +120,8 @@ export function TaskBoard({
             return (
               <div
                 key={g.key}
-                className={`flex flex-col gap-3.5 rounded-[22px] border p-3 sm:p-5 ${g.dated ? "border-[#F3D3D3] bg-[#FDF3F3]" : "border-line bg-soft/60"}`}
+                id={`m-${g.key}`}
+                className={`flex scroll-mt-24 flex-col gap-3.5 rounded-[22px] border p-3 transition-shadow sm:p-5 ${g.dated ? "border-[#F3D3D3] bg-[#FDF3F3]" : "border-line bg-soft/60"} ${focus === g.key ? "shadow-[0_0_0_3px_var(--color-ink)]" : ""}`}
               >
                 <div className="flex items-start gap-3.5">
                   <span className="inline-flex size-10 shrink-0 items-center justify-center rounded-2xl text-white sm:size-12" style={{ background: accent }}>

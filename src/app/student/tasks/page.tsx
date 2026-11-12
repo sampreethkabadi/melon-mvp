@@ -14,7 +14,8 @@ import { TaskBoard, type BoardItem, type MilestoneGroup } from "./TaskBoard";
 
 export const metadata = { title: "Action items · Melon" };
 
-export default async function TasksPage() {
+export default async function TasksPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+  const { m: focus } = await searchParams;
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
   const { roadmap, interests, paths, pinned, steps, year, gradTerm } = await loadRoadmap(supabase, profile.id);
@@ -132,6 +133,7 @@ export default async function TasksPage() {
 
       <TaskBoard
         groups={groups}
+        focus={focus ?? null}
         items={others}
         done={done}
         upcoming={upcomingSection}

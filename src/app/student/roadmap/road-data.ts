@@ -77,7 +77,8 @@ export function buildRoadData(input: {
             : `Planned · ${shortTerm(s.term ?? slot.term)}`;
       const outcomes = (s.outcomes ?? []).filter(Boolean);
       // What the student did to get here: the action items behind this milestone.
-      const did = tasksFor(milestoneKey(s, main?.name), input.steps, s.term ?? slot.term).filter((t) => t.status === "done");
+      const key = milestoneKey(s, main?.name);
+      const did = tasksFor(key, input.steps, s.term ?? slot.term).filter((t) => t.status === "done");
       const summary = did.length
         ? `You finished ${did.length === 1 ? "an action item" : `${did.length} action items`} to get here. Nice work.`
         : s.source === "student"
@@ -94,7 +95,7 @@ export function buildRoadData(input: {
         about: summary,
         wins: outcomes,
         tasks: did.map((t) => ({ title: t.title, done: true })),
-        href: `/student/roadmap/milestone/${s.id}`,
+        href: key && k === current ? `/student/tasks?m=${key}` : "/student/tasks",
       };
     });
     // Faded flags: what this semester usually holds, from the four-year guide. This semester's are crimson and
@@ -137,7 +138,7 @@ export function buildRoadData(input: {
                     ? mine.map((t) => ({ title: t.title, done: t.status === "done" }))
                     : m.tasks.map((t) => ({ title: t, done: false }));
                 })(),
-                href: `/student/roadmap/milestone/planned-${k}-${m.key}`,
+                href: `/student/tasks?m=${m.key}`,
                 claim: now
                   ? {
                       title: win,

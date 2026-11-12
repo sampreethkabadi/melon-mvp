@@ -25,7 +25,7 @@ export type RoadItem = {
   claim?: { title: string; kind: string; ask: boolean; ready: boolean };
   /** The action items behind this milestone: what the student did (done) or still has to do. */
   tasks?: Array<{ title: string; done: boolean }>;
-  /** The milestone's page, which lists those action items. */
+  /** Where "See action items" goes: the Action items tab, focused on this milestone. */
   href: string;
 };
 export type RoadSemester = { term: string; short: string; year: string; status: "done" | "now" | "next"; items: RoadItem[]; canAdd: boolean };
@@ -910,13 +910,13 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                       {claimError && <p className="text-xs font-semibold text-firm">{claimError}</p>}
                     </div>
                   )}
-                  {(tipView.it.state !== "planned" || !tipView.it.id.startsWith("planned-")) && (
+                  {tipView.it.href.includes("?m=") && (
                     <Link
                       prefetch={false}
                       href={tipView.it.href}
                       className="mt-1.5 self-start text-[13.5px] font-bold text-link underline underline-offset-[3px]"
                     >
-                      See details →
+                      See action items →
                     </Link>
                   )}
                   <span
