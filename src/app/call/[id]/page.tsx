@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { requireRole } from "@/lib/auth";
 import { isDailyConfigured } from "@/lib/daily";
 import { createClient } from "@/lib/supabase/server";
+import { reopenCall } from "../actions";
 import { CallRoom } from "./CallRoom";
 import { TranscriptEditor, type EditorLine } from "./TranscriptEditor";
 
@@ -17,7 +18,7 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      "id, status, session_type, student_id, staff_id, transcript_source, student:profiles!sessions_student_id_fkey(full_name), staff:profiles!sessions_staff_id_fkey(full_name)",
+      "id, status, session_type, student_id, staff_id, transcript_source, call_ended_at, student:profiles!sessions_student_id_fkey(full_name), staff:profiles!sessions_staff_id_fkey(full_name)",
     )
     .eq("id", id)
     .maybeSingle();
@@ -71,6 +72,34 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <Link href={back} className="rounded-full bg-ink px-5 py-2.5 font-extrabold text-white">
           {me === "staff" ? "Review the summary" : "Go to Appointments"}
         </Link>
+      </section>
+    );
+  } else if (session.call_ended_at) {
+    const making = ["recording", "uploaded"].includes(status);
+    body = (
+      <section className="flex flex-col items-start gap-3 rounded-3xl border border-line bg-white p-6">
+        {making && <AutoRefresh ms={3000} />}
+        <h1 className="text-2xl font-extrabold">The meeting has ended</h1>
+        <p className="text-ink-2">
+          {making
+            ? "Making the transcript from the recording. It opens here for both of you in a few seconds."
+            : status === "failed"
+              ? "The transcript couldn't be made from the recording this time."
+              : "Nothing was recorded."}{" "}
+          {me === "staff" ? "From the session page you can use the sample conversation or write notes instead." : ""}
+        </p>
+        {!making && (
+          <div className="flex flex-wrap gap-2">
+            <Link href={back} className="rounded-full bg-ink px-5 py-2.5 font-extrabold text-white">
+              {me === "staff" ? "Go to the session" : "Go to Appointments"}
+            </Link>
+            {me === "staff" && status !== "failed" && (
+              <form action={reopenCall.bind(null, session.id)}>
+                <button className="rounded-full border border-line bg-white px-5 py-2.5 font-semibold">Reopen the call</button>
+              </form>
+            )}
+          </div>
+        )}
       </section>
     );
   } else if (!isDailyConfigured()) {

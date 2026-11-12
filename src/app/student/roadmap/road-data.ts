@@ -88,10 +88,12 @@ export function buildRoadData(input: {
         : s.source === "student"
           ? ""
           : (s.description ?? "");
+      // A win reads in the past tense. A goal not reached yet keeps its own words.
+      const name = s.status === "done" ? winLabel(s) : s.title;
       return {
         id: s.id,
-        label: shorten(winLabel(s)),
-        title: winLabel(s),
+        label: shorten(name),
+        title: name,
         icon: iconFor(s.kind, s.title),
         state,
         sub,

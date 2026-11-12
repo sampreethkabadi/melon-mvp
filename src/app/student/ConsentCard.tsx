@@ -7,6 +7,7 @@ import { answerConsent } from "./actions";
 type LiveSession = {
   id: string;
   call_room: string | null;
+  call_ended_at: string | null;
   status: string;
   staff: { full_name: string } | null;
   consents: Array<{ subject_id: string; granted: boolean; scope: string; created_at: string }>;
@@ -17,7 +18,7 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("sessions")
-    .select("id, call_room, status, staff:profiles!sessions_staff_id_fkey(full_name), consents(subject_id, granted, scope, created_at)")
+    .select("id, call_room, call_ended_at, status, staff:profiles!sessions_staff_id_fkey(full_name), consents(subject_id, granted, scope, created_at)")
     .eq("student_id", studentId)
     .in("status", ["created", "consented", "recording", "transcribed"])
     .order("created_at", { ascending: false })
@@ -30,6 +31,8 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .at(-1);
   const name = session.staff?.full_name ?? "Your advisor";
+  // A Melon video call that ended: nothing to answer, unless the transcript is waiting to be checked.
+  if (session.call_room && session.call_ended_at && session.status !== "transcribed") return <AutoRefresh ms={5000} />;
   // A Melon video call: the recording question is asked inside the call, next to the video.
   if (session.call_room) {
     return (

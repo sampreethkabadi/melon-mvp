@@ -21,6 +21,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3f | Polish: switching paths animates on the road, and every button, link and expandable row reacts the same way to the cursor | ✅ |
 | 4c | Summaries by a local open-source model (Ollama), and the advisor decides where each action item goes: action item, milestone, or under a goal | ✅ |
 | 4d | Melon video calls (Daily): consent from both people inside the call, each person's own microphone recorded, and a transcript both can fix before the summary | ✅ |
+| 4e | Call controls: either person can pause and resume the recording or end the meeting; students join from Home or Appointments; a goal shows its waiting steps | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -29,7 +30,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql), [`0009_candy_road.sql`](supabase/migrations/0009_candy_road.sql), [`0010_action_item_placement.sql`](supabase/migrations/0010_action_item_placement.sql), [`0011_video_calls.sql`](supabase/migrations/0011_video_calls.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql), [`0009_candy_road.sql`](supabase/migrations/0009_candy_road.sql), [`0010_action_item_placement.sql`](supabase/migrations/0010_action_item_placement.sql), [`0011_video_calls.sql`](supabase/migrations/0011_video_calls.sql), [`0012_call_controls.sql`](supabase/migrations/0012_call_controls.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -110,10 +111,12 @@ The first summary after starting takes about a minute while the model loads, the
 
 ## Melon video calls
 
-With `DAILY_API_KEY` set, an advisor or coach can click **Start a video call** on a session page. The student gets a notification and a **Join the video call** card on Home. Inside the call:
+With `DAILY_API_KEY` set, an advisor or coach can click **Start a video call** on a session page. The student gets a notification, a **Join the video call** card on Home and on Appointments, and a **Join the video call** button on that appointment. Inside the call:
 
 - Each person agrees to recording (or not) next to the video. Nothing is recorded until both say yes, and either can stop it any time, which keeps nothing.
 - The advisor or coach starts the recording. Each browser records only its own microphone, so the transcript knows who said what.
+- Either person can **Pause recording** (nothing is recorded while paused) and either can **Resume recording**.
+- Either person can **End meeting**, recording or not. It ends the call for both. If it was recording, the transcript is made; if not, both see "Nothing was recorded" and the advisor or coach can reopen the call or use the sample conversation from the session page.
 - **End recording · show transcript** turns both recordings into one transcript (needs `DEEPGRAM_API_KEY`), or use **Use the sample conversation instead**.
 - Both people then see the transcript and can fix, add or delete lines. Every change is logged with who made it and what it said before. **Looks right · draft the summary** locks it and drafts the key points and action items for review.
 
@@ -123,7 +126,7 @@ For a demo, use two devices with headphones, or two rooms: two microphones in on
 
 - **Today:** a card for each meeting with what it's probably about, the student's progress, their background and what's still open. The next meeting opens on its own. It's built from their record, so it needs no AI key.
 - **Students:** everyone at a glance, with progress and what needs a look. Filter, search or sort, and open a row for details.
-- **Reviews:** action items and key points from each session, next to the transcript lines behind them. Approve, edit or remove them one by one, or approve the rest in one click. For each action item, choose where it goes: an **Action item** (the default), a **Milestone** on the student's road in a semester you pick, or **Under a goal** (one already on their roadmap, or a new one you name). Goals show on the road as flags and on Action items as groups with their steps.
+- **Reviews:** action items and key points from each session, next to the transcript lines behind them. Approve, edit or remove them one by one, or approve the rest in one click. For each action item, choose where it goes: an **Action item** (the default), a **Milestone** on the student's road in a semester you pick, or **Under a goal** (one already on their roadmap, or a new one you name). Goals show on the road as flags and on Action items as groups with their steps. Steps under a goal that wait in line (past the 5 open, or past 2 new per session) still show under it as "Up next", so the student sees the whole plan, but they can't be ticked until they open up.
 - **Roadmaps:** drafts are edited directly. Once both sides have accepted a roadmap, staff can only suggest adding, changing or removing a step, and the student decides. The database enforces this. Steps approved from a session still go straight on, because they were agreed in the meeting.
 
 ## How new sign-ups get an advisor
@@ -186,6 +189,7 @@ psql -f supabase/migrations/0008_advisor_suggestions.sql
 psql -f supabase/migrations/0009_candy_road.sql
 psql -f supabase/migrations/0010_action_item_placement.sql
 psql -f supabase/migrations/0011_video_calls.sql
+psql -f supabase/migrations/0012_call_controls.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql

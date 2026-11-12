@@ -68,6 +68,8 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     .map((g) => {
       const mine = active.filter((s) => s.parent_id === g.id).sort(byDate);
       mine.forEach((s) => taken.add(s.id));
+      // Steps under this goal that wait in line: shown so the plan is whole, but they can't be ticked yet.
+      const next = steps.filter((s) => s.parent_id === g.id && (s.status === "queued" || s.status === "locked")).sort(byDate);
       const finished = doneSteps.filter((s) => s.parent_id === g.id).length;
       return {
         key: `goal-${g.id}`,
@@ -76,9 +78,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
         dated: false,
         days: null,
         note: "You set this goal with your advisor or coach. Tick these off, then mark the goal done on your road.",
-        total: mine.length + finished,
+        total: mine.length + next.length + finished,
         done: finished,
-        items: mine.map(toItem),
+        items: [...mine.map(toItem), ...next.map((s) => ({ ...toItem(s), waiting: true }))],
       };
     })
     .filter((g) => g.items.length > 0);
