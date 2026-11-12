@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
-import { Check, Flag, Target, Undo2 } from "lucide-react";
+import { Check, Flag, Hourglass, Target, Undo2 } from "lucide-react";
 import { setItemDone } from "../actions";
 
-export type BoardItem = { id: string; title: string; meta: string; date: string | null; fixed: boolean };
+export type BoardItem = { id: string; title: string; meta: string; date: string | null; fixed: boolean; /** Up next: opens once a step is finished. Can't be ticked yet. */ waiting?: boolean };
 export type DoneItem = { id: string; title: string; when: string; goal?: string };
 /** A milestone and the tasks that lead to it. Dated ones (the career fair) are crimson and count down. */
 export type MilestoneGroup = { key: string; title: string; when: string; dated: boolean; days: number | null; note: string; total: number; done: number; items: BoardItem[] };
@@ -248,6 +248,14 @@ function Row({ item, pending, onTick, onUndo }: { item: BoardItem; pending: bool
       className={`mb-2.5 flex min-w-0 flex-1 flex-col gap-2 rounded-[14px] border px-3 py-3 sm:px-3.5 transition-colors duration-300 ${pending ? "border-[#B9DCC2] bg-done-bg" : "border-line bg-white"}`}
     >
       <div className="flex items-center gap-3">
+        {item.waiting ? (
+          <span
+            title="Up next: this opens when you finish a step"
+            className="inline-flex size-[26px] shrink-0 items-center justify-center rounded-lg border-2 border-dashed border-[#C9D0CC] text-muted"
+          >
+            <Hourglass size={13} aria-hidden="true" />
+          </span>
+        ) : (
         <button
           type="button"
           onClick={pending ? onUndo : onTick}
@@ -257,6 +265,7 @@ function Row({ item, pending, onTick, onUndo }: { item: BoardItem; pending: bool
         >
           {pending && <Check size={15} strokeWidth={3.2} aria-hidden="true" className="anim-pop" />}
         </button>
+        )}
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <Link
             href={`/student/tasks/${item.id}`}
@@ -264,7 +273,7 @@ function Row({ item, pending, onTick, onUndo }: { item: BoardItem; pending: bool
           >
             {item.title}
           </Link>
-          {item.meta && !pending && <span className="text-[13px] text-muted">{item.meta}</span>}
+          {item.meta && !pending && <span className="text-[13px] text-muted">{item.waiting ? `Up next · opens when you finish a step · ${item.meta}` : item.meta}</span>}
           {item.date && !pending && (
             <span className={`text-[13px] sm:hidden ${item.fixed ? "font-extrabold text-firm" : "font-bold text-muted"}`}>{item.date}</span>
           )}

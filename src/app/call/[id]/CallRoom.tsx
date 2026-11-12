@@ -4,7 +4,7 @@ import DailyIframe, { type DailyCall } from "@daily-co/daily-js";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { answerInCall, callState, finishCall, joinCall, startCallRecording, trackUpload, sampleInCall, type CallState } from "../actions";
+import { answerInCall, callState, endMeeting, finishCall, joinCall, sampleInCall, setPaused, startCallRecording, trackDone, trackUpload, type CallState } from "../actions";
 
 type Props = { sessionId: string; me: "staff" | "student"; other: string };
 
@@ -64,6 +64,22 @@ export function CallRoom({ sessionId, me, other }: Props) {
     [sessionId],
   );
 
+  /** Recording is over: send the last piece, then say this browser is done so the transcript can be made. */
+  const finishMine = useCallback(async () => {
+    await stopMine(true);
+    await trackDone(sessionId);
+  }, [sessionId, stopMine]);
+
+  // Leaves the video. The page then shows that the meeting ended (and the transcript, if there is one).
+  const leave = useCallback(() => {
+    void call.current?.leave();
+    void call.current?.destroy();
+    call.current = null;
+  }, []);
+  const ending = useRef(false);
+  // Set the moment someone presses pause, so nothing restarts the recording before the pause is saved.
+  const holdUntil = useRef(0);
+
   // ---- joining
   useEffect(() => {
     let cancelled = false;
@@ -77,10 +93,25 @@ export function CallRoom({ sessionId, me, other }: Props) {
           iframeStyle: { width: "100%", height: "100%", border: "0", borderRadius: "24px" },
         });
         call.current = frame;
-        // The other side ended the recording: stop and send mine right away.
+        // The other person ended the recording or the meeting: send mine right away.
         frame.on("app-message", (e) => {
           const data = e?.data as { melon?: string } | undefined;
-          if (data?.melon === "stop") void stopMine(true).catch((err) => setNote(err instanceof Error ? err.message : String(err)));
+          if (data?.melon === "stop" || data?.melon === "end") {
+            ending.current = true;
+            void finishMine()
+              .catch((err) => setNote(err instanceof Error ? err.message : String(err)))
+              .finally(() => {
+                if (data.melon === "end") {
+                  leave();
+                  router.refresh();
+                }
+              });
+          }
+          if (data?.melon === "pause") {
+            holdUntil.current = Date.now() + 8000;
+            void stopMine(true).catch(() => undefined);
+          }
+          if (data?.melon === "resume") holdUntil.current = 0;
         });
         await frame.join({ url, token });
       } catch (e) {
@@ -93,7 +124,8 @@ export function CallRoom({ sessionId, me, other }: Props) {
       void call.current?.destroy();
       call.current = null;
     };
-  }, [sessionId, stopMine]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   // ---- who has agreed, and whether we're recording (checked every 2.5 seconds)
   useEffect(() => {
@@ -105,15 +137,26 @@ export function CallRoom({ sessionId, me, other }: Props) {
         setState(s);
         const iAgree = s.me === "staff" ? s.staffAgreed : s.studentAgreed;
         const allYes = s.staffAgreed === true && s.studentAgreed === true;
-        if (s.status === "recording" && allYes && iAgree) void startMine().catch(() => setNote("We couldn't use your microphone for the recording."));
+        const live = s.status === "recording" && !s.pausedBy && !s.ended;
+        if (s.pausedBy) holdUntil.current = 0; // the pause is saved: the paused state itself keeps it off
+        if (live && allYes && iAgree && !ending.current && Date.now() > holdUntil.current) void startMine().catch(() => setNote("We couldn't use your microphone for the recording."));
         // Someone said no: stop and discard.
         if (rec.current && !allYes) {
           void stopMine(false);
           setNote("Someone said no, so recording stopped and nothing was kept.");
         }
-        // The advisor or coach ended the recording (backup for the in-call message).
-        if (rec.current && s.status !== "recording" && allYes) void stopMine(true).catch((err) => setNote(err instanceof Error ? err.message : String(err)));
-        if (s.status === "transcribed") router.refresh();
+        // Paused: close this piece of the recording and send it. A new piece starts on resume.
+        if (rec.current && s.status === "recording" && s.pausedBy) void stopMine(true).catch(() => undefined);
+        // The recording or the meeting ended (backup for the in-call message).
+        if (s.status !== "recording" && allYes && (rec.current || s.status === "uploaded") && !ending.current) {
+          ending.current = true;
+          void finishMine().catch((err) => setNote(err instanceof Error ? err.message : String(err)));
+        }
+        if (s.ended && !ending.current) {
+          ending.current = true;
+          leave();
+        }
+        if (s.status === "transcribed" || s.ended) router.refresh();
       } catch {
         // A missed check is fine; the next one catches up.
       }
@@ -124,7 +167,7 @@ export function CallRoom({ sessionId, me, other }: Props) {
       alive = false;
       clearInterval(t);
     };
-  }, [sessionId, startMine, stopMine, router]);
+  }, [sessionId, startMine, stopMine, finishMine, leave, router]);
 
   const run = (label: string, fn: () => Promise<unknown>) => {
     setNote(null);
@@ -144,15 +187,48 @@ export function CallRoom({ sessionId, me, other }: Props) {
   const theyAgree = state ? (me === "staff" ? state.studentAgreed : state.staffAgreed) : null;
   const allYes = iAgree === true && theyAgree === true;
   const isRecording = state?.status === "recording";
+  const paused = isRecording && state?.pausedBy != null;
+  const pausedByName = state?.pausedBy === me ? "you" : other.split(" ")[0];
 
+  // Ends the recording for both of you; the meeting goes on until someone ends it.
   const endRecording = () =>
     run("end", async () => {
+      ending.current = true;
       call.current?.sendAppMessage({ melon: "stop" }, "*");
-      await stopMine(true);
+      await finishMine();
       const res = await finishCall(sessionId);
       if (!res.ok && res.message) setNote(res.message);
       router.refresh();
     });
+
+  const pause = (on: boolean) =>
+    run(on ? "pause" : "resume", async () => {
+      if (on) {
+        holdUntil.current = Date.now() + 8000;
+        call.current?.sendAppMessage({ melon: "pause" }, "*");
+        const stopping = stopMine(true);
+        await setPaused(sessionId, true);
+        await stopping;
+      } else {
+        holdUntil.current = 0;
+        await setPaused(sessionId, false);
+        call.current?.sendAppMessage({ melon: "resume" }, "*");
+      }
+    });
+
+  // Ends the meeting for both of you, recording or not. If it was recording, the transcript is made.
+  const endForBoth = () => {
+    if (!confirm(isRecording ? "End the meeting for both of you? The recording stops and the transcript is made." : "End the meeting for both of you?")) return;
+    run("leave", async () => {
+      ending.current = true;
+      call.current?.sendAppMessage({ melon: "end" }, "*");
+      if (isRecording) await finishMine();
+      leave();
+      const res = await endMeeting(sessionId);
+      if (!res.ok && res.message) setNote(res.message);
+      router.refresh();
+    });
+  };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
@@ -163,10 +239,16 @@ export function CallRoom({ sessionId, me, other }: Props) {
             {joinError}
           </p>
         )}
-        {(isRecording || recording) && (
-          <span className="pointer-events-none absolute left-4 top-12 flex items-center gap-2 rounded-full bg-firm px-3 py-1.5 text-xs font-extrabold text-white">
-            <span className="size-2 animate-pulse rounded-full bg-white" /> Recording
+        {paused ? (
+          <span className="pointer-events-none absolute left-4 top-12 flex items-center gap-2 rounded-full bg-warn-bg px-3 py-1.5 text-xs font-extrabold text-warn-ink">
+            Paused by {pausedByName} · nothing is recorded
           </span>
+        ) : (
+          (isRecording || recording) && (
+            <span className="pointer-events-none absolute left-4 top-12 flex items-center gap-2 rounded-full bg-firm px-3 py-1.5 text-xs font-extrabold text-white">
+              <span className="size-2 animate-pulse rounded-full bg-white" /> Recording
+            </span>
+          )
         )}
       </div>
 
@@ -196,6 +278,23 @@ export function CallRoom({ sessionId, me, other }: Props) {
               {isRecording ? "Stop recording me · keep nothing" : "I changed my mind"}
             </button>
           )}
+        </section>
+
+        <section className="flex flex-col gap-2 rounded-3xl border border-line bg-white p-5">
+          {isRecording && (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => pause(!paused)}
+              className={`rounded-full px-5 py-2.5 font-extrabold disabled:opacity-50 ${paused ? "bg-firm text-white" : "border-2 border-ink bg-white text-ink"}`}
+            >
+              {busy === "pause" ? "Pausing…" : busy === "resume" ? "Resuming…" : paused ? "Resume recording" : "Pause recording"}
+            </button>
+          )}
+          <button type="button" disabled={pending} onClick={endForBoth} className="rounded-full border border-firm bg-firm-bg px-5 py-2.5 font-extrabold text-firm disabled:opacity-50">
+            {busy === "leave" ? (isRecording ? "Ending · making the transcript…" : "Ending…") : "End meeting"}
+          </button>
+          <p className="text-xs text-muted">Either of you can pause the recording or end the meeting. Ending it ends it for both of you.</p>
         </section>
 
         {me === "staff" && (

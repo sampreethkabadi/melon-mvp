@@ -45,7 +45,8 @@ export function focusSteps(steps: Step[], sem: Semester) {
   return {
     now: open.slice(0, 3),
     unlocks: open.slice(3),
-    waiting: steps.filter((s) => s.status === "queued").sort(byPlan),
+    // Steps under a goal that wait in line are listed with their goal instead.
+    waiting: steps.filter((s) => s.status === "queued" && !s.parent_id).sort(byPlan),
     paused: steps.filter((s) => s.status === "paused"),
     later: steps.filter((s) => s.status === "active" && !thisTerm(s)).sort(byPlan),
     done: steps.filter((s) => s.status === "done").sort((a, b) => (b.completed_at ?? "").localeCompare(a.completed_at ?? "")),

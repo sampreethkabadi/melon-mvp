@@ -12,6 +12,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/types";
 import { flagHighlight } from "../actions";
+import { ConsentCard } from "../ConsentCard";
 
 export const metadata = { title: "Appointments · Melon" };
 
@@ -57,6 +58,17 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
     supabase.from("advice_items").select("session_id, text, status").eq("student_id", profile.id),
     supabase.from("insight_flags").select("insight_id, status").eq("student_id", profile.id),
   ]);
+  // Video calls that are open right now (or whose transcript is waiting to be checked), by appointment.
+  const { data: callRows } = await supabase
+    .from("sessions")
+    .select("id, appointment_id, status, call_ended_at")
+    .eq("student_id", profile.id)
+    .not("call_room", "is", null)
+    .in("status", ["created", "consented", "recording", "uploaded", "transcribed"]);
+  const liveCalls = ((callRows ?? []) as Array<{ id: string; appointment_id: string | null; status: string; call_ended_at: string | null }>).filter(
+    (c) => !c.call_ended_at || c.status === "transcribed",
+  );
+  const callFor = (apptId: string) => liveCalls.find((c) => c.appointment_id === apptId);
 
   const appts = (apptRows ?? []) as unknown as Appointment[];
   const sessions = (sessionRows ?? []) as unknown as Session[];
@@ -85,6 +97,9 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
         <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Appointments</h1>
         <p className="mt-1 text-ink-2">Book through the career center as usual. It shows up here.</p>
       </div>
+
+      {/* Your advisor or coach opened a call, or asked to record: answer here as well as on Home. */}
+      <ConsentCard studentId={profile.id} />
 
       <section className="flex flex-col gap-3">
         <h2 className="text-xl font-extrabold">Coming up</h2>
@@ -119,10 +134,20 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
                     </span>
                   </div>
                   <div className="mt-auto flex items-center justify-between gap-3">
-                    <span className="flex items-center gap-1.5 text-[13px] font-bold text-muted">
-                      <Mic size={15} aria-hidden="true" />
-                      Asks before recording
-                    </span>
+                    {callFor(a.id) ? (
+                      <Link
+                        href={`/call/${callFor(a.id)!.id}`}
+                        className="anim-pulse inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2.5 text-sm font-extrabold text-white"
+                      >
+                        <Video size={16} aria-hidden="true" />
+                        {callFor(a.id)!.status === "transcribed" ? "Check the transcript" : "Join the video call"}
+                      </Link>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-[13px] font-bold text-muted">
+                        <Mic size={15} aria-hidden="true" />
+                        Asks before recording
+                      </span>
+                    )}
                     <a
                       href={calendarLink(a)}
                       target="_blank"
