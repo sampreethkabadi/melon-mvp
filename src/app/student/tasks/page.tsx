@@ -4,7 +4,7 @@ import { Backdrop } from "@/components/Backdrop";
 import { SubmitButton } from "@/components/SubmitButton";
 import { requireRole } from "@/lib/auth";
 import { longDate, shortDate, shortTerm } from "@/lib/format";
-import { pastTense, plannedFor, TASK_MATCH } from "@/lib/roadmap/milestones";
+import { isMilestone, milestoneKey, pastTense, plannedFor, TASK_MATCH } from "@/lib/roadmap/milestones";
 import { semestersFor } from "@/lib/roadmap/road";
 import { currentSemester } from "@/lib/roadmap/semester";
 import { focusSteps, KIND_LABEL, loadFairPlan, loadRoadmap, upcomingEvents, type Step } from "@/lib/student-data";
@@ -50,10 +50,12 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
   const slots = semestersFor(year, gradTerm, sem.term);
   const slot = Math.max(0, slots.findIndex((x) => x.term === sem.term));
   const main = pinned[0];
-  const claimed = new Set(steps.filter((s) => s.status === "done" && s.term === sem.term).map((s) => s.title.toLowerCase()));
+  const reached = steps.filter((s) => s.status === "done" && s.term === sem.term && isMilestone(s));
+  const claimed = new Set(reached.map((s) => s.title.toLowerCase()));
+  const claimedKeys = new Set(reached.map((s) => milestoneKey(s, main?.name)).filter(Boolean));
   const planned = plannedFor(slot, slots.length)
     .map((m) => ({ ...m, title: m.path && main ? m.title.replace("your path", main.name) : m.title }))
-    .filter((m) => !claimed.has(pastTense(m.title).toLowerCase()));
+    .filter((m) => !claimed.has(pastTense(m.title).toLowerCase()) && !claimedKeys.has(m.key));
   if (plan && !planned.some((m) => m.key === "fair")) planned.unshift({ key: "fair", title: "Go to the Career Fair", dated: true, tasks: [] });
   const active = [...f.now, ...f.unlocks];
   const taken = new Set<string>();

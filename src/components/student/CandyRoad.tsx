@@ -564,7 +564,7 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                         id={`road-flag-${item.id}`}
                         prefetch={false}
                         href={item.href}
-                        aria-label={`${item.title}, ${item.sub}. Opens its details.`}
+                        aria-label={`${item.title}, ${item.sub}. Opens its action items.`}
                         onMouseEnter={() => showTip(k, j)}
                         onMouseLeave={hideTip}
                         onFocus={() => showTip(k, j)}

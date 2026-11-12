@@ -141,6 +141,7 @@ export function milestoneKey(item: { title: string; kind: string }, pathName?: s
   if (/\bclub\b/i.test(item.title)) return /lead|president|officer/i.test(item.title) ? "lead" : "club";
   if (/intern/i.test(item.title)) return "intern";
   if (/resume/i.test(item.title)) return "resume";
+  if (item.kind === "project") return "project";
   return null;
 }
 

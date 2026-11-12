@@ -156,7 +156,9 @@ export default async function AppointmentsPage({ searchParams }: { searchParams:
                   {s.staff && <Avatar name={s.staff.full_name} role={s.staff.role} size={44} badge={false} />}
                   <b className="min-w-0 flex-1 text-base sm:text-[17px]">{s.session_type ?? "Appointment"}</b>
                   {s.mode === "notes_only" && <Pill>Notes only</Pill>}
-                  <span className="shrink-0 text-sm font-semibold text-muted">{shortDate(s.created_at)}</span>
+                  <span className="shrink-0 text-sm font-semibold text-muted">{shortDate(s.created_at)}
+                    {s.created_at.slice(0, 4) !== today.slice(0, 4) ? `, ${s.created_at.slice(0, 4)}` : ""}
+                  </span>
                   <ChevronDown size={20} aria-hidden="true" className="shrink-0 text-muted transition-transform duration-300 group-open:rotate-180" />
                 </summary>
                 <div className="anim-fade-up flex flex-col gap-3.5 px-5 pb-5">

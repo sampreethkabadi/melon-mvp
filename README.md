@@ -59,7 +59,7 @@ Open `https://YOUR-VERCEL-LINK/api/dev/seed?secret=YOUR_SEED_SECRET` in a browse
 - **Demo day:** Thursday, Sep 3, 2026. The Fall Career Fair is Sep 17–18, and the career center's events (resume drop-in, pitch workshop, mock fair, alumni chat) are dated around it.
 - **Advisors (courses and policy):** `lee@`, `malik@`, `becker@melon.test`, with 4 students each
 - **Career coach (careers):** `rivera@melon.test`, assigned to everyone. `admin@melon.test` (admin)
-- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
+- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `taylor@` (junior who has used Melon since freshman fall: nearly every milestone from the Luddy four-year guide, each with the action items behind it, and 3 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
 - **Other students:** `ava@`, `daniel@`, `nina@`, `omar@` (Malik), `grace@`, `tyler@`, `zoe@`, `marcus@` (Becker), all `@melon.test`
 - Demo-day appointments, each with the type the student booked (for example Maya: Course planning with Lee, Career fair preparation with Rivera)
 - A short "start here, then this" list per path and year (juniors and up: per job, for 12 common jobs), clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations

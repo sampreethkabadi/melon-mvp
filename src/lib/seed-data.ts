@@ -30,6 +30,7 @@ export const SEED_STUDENTS: SeedStudent[] = [
   { advisor: LEE, email: "leo@melon.test", full_name: "Leo Martinez", class_year: "freshman", program: "Exploratory", majors: ["Exploring majors"], minors: [], expected_grad_term: "May 2030", interests: ["unsure", "ux"], onboarding_step: "resume" },
   { advisor: LEE, email: "maya@melon.test", full_name: "Maya Patel", class_year: "junior", program: "B.S. Data Science", majors: ["Data Science"], minors: ["Business"], expected_grad_term: "May 2028", interests: ["data", "soft"], onboarding_step: "done" },
   { advisor: LEE, email: "sam@melon.test", full_name: "Sam Okafor", class_year: "junior", program: "B.S. Computer Science", majors: ["Computer Science"], minors: [], expected_grad_term: "May 2028", interests: ["soft", "cyber"], onboarding_step: "resume" },
+  { advisor: LEE, email: "taylor@melon.test", full_name: "Taylor Johnson", class_year: "junior", program: "B.S. Computer Science", majors: ["Computer Science"], minors: ["Informatics"], expected_grad_term: "May 2028", interests: ["soft", "ux"], onboarding_step: "done" },
   { advisor: LEE, email: "priya@melon.test", full_name: "Priya Shah", class_year: "senior", program: "B.S. Business", majors: ["Finance"], minors: ["Economics"], expected_grad_term: "May 2027", interests: ["biz"], onboarding_step: "done" },
   { advisor: MALIK, email: "ava@melon.test", full_name: "Ava Chen", class_year: "sophomore", program: "B.S. Informatics", majors: ["Informatics"], minors: ["Business"], expected_grad_term: "May 2029", interests: ["ux", "soft"], onboarding_step: "resume" },
   { advisor: MALIK, email: "daniel@melon.test", full_name: "Daniel Kim", class_year: "grad", program: "M.S. Data Science", majors: ["Data Science"], minors: [], expected_grad_term: "May 2027", interests: ["data"], onboarding_step: "resume" },
@@ -65,6 +66,7 @@ export const SEED_APPOINTMENTS: Array<[string, string, string, "in_person" | "te
   ["leo@melon.test", "12:00", "Drop-in", "in_person", "Career center", "coach"],
   ["sam@melon.test", "11:00", "Mock technical interview", "melon_call", null, "coach"],
   ["maya@melon.test", "14:00", "Career fair preparation", "in_person", "Career center, room 3", "coach"],
+  ["taylor@melon.test", "16:00", "Mock technical interview", "melon_call", null, "coach"],
   ["priya@melon.test", "15:30", "Mock behavioral interview", "teams", null, "coach"],
   ["ava@melon.test", "09:00", "Resume, cover letter or portfolio review", "in_person", "Career center, room 3", "coach"],
   ["omar@melon.test", "16:30", "Internship search", "teams", null, "coach"],
@@ -74,6 +76,7 @@ export const SEED_APPOINTMENTS: Array<[string, string, string, "in_person" | "te
 export const SEED_DONE_ANSWERS: Record<string, { answers: Record<string, string>; target_roles: string[] }> = {
   "maya@melon.test": { answers: { domain: "machine learning", internship: "applying", linkedin_status: "basic" }, target_roles: ["Data analyst", "ML engineer"] },
   "priya@melon.test": { answers: { search_stage: "interviewing", linkedin_status: "basic" }, target_roles: ["Financial analyst", "Consultant", "Investment associate"] },
+  "taylor@melon.test": { answers: { domain: "web apps", internship: "applying", linkedin_status: "strong" }, target_roles: ["Software engineer", "Product manager"] },
 };
 
 type Course = [code: string, title: string, term: string, status: "completed" | "in_progress"];
@@ -101,6 +104,20 @@ export const SEED_HISTORY: Record<string, { courses: Course[]; experience: Job[]
       { title: "Teaching Assistant, STAT-S 350", org: "Indiana University", start: "Jan 2026", end: "May 2026" },
     ],
     clubs: ["Data Science Club"],
+  },
+  "taylor@melon.test": {
+    courses: [
+      ["CSCI-C 200", "Intro to Programming", "Fall 2024", "completed"],
+      ["CSCI-C 211", "Intro to Computer Science", "Spring 2025", "completed"],
+      ["CSCI-C 343", "Data Structures", "Fall 2025", "completed"],
+      ["INFO-I 300", "Human-Computer Interaction", "Spring 2026", "completed"],
+      ["CSCI-P 465", "Software Engineering I", "Fall 2026", "in_progress"],
+    ],
+    experience: [
+      { title: "CourseMate (course-planner web app)", org: null, start: "Jan 2026", end: "Apr 2026" },
+      { title: "Software Engineering Intern", org: "Hoosier Logistics", start: "May 2026", end: "Aug 2026" },
+    ],
+    clubs: ["Computer Science Club"],
   },
   "priya@melon.test": {
     courses: [
@@ -184,3 +201,143 @@ export const SEED_INTEGRATIONS = [
   { system: "stellic", enabled: false, status_note: "Mock · CSV import ready" },
   { system: "canvas", enabled: false, status_note: "Needs a school developer key" },
 ] as const;
+
+/**
+ * Taylor's story: a junior who has used Melon since her first semester, so the road shows almost every milestone
+ * from the Luddy four-year career guide, each with the action items she finished to get there.
+ * Milestone titles match the guide's wording in the past tense; action item kinds keep them off the road.
+ */
+export const SEED_TAYLOR_STORY: Array<{
+  season: "Spring" | "Fall";
+  yearOffset: number;
+  month: number;
+  /** Day of the month her first action item for it was done (default the 2nd). */
+  day?: number;
+  milestone: { kind: string; title: string; description: string; outcomes: string[] };
+  tasks: Array<[kind: string, title: string]>;
+}> = [
+  {
+    season: "Fall",
+    yearOffset: -2,
+    month: 10,
+    milestone: {
+      kind: "project",
+      title: "Finished your first college resume",
+      description: "One page, reviewed by a coach, and on Handshake.",
+      outcomes: ["A resume ready for the spring fair", "Learned to lead every bullet with a verb"],
+    },
+    tasks: [
+      ["skill", "Write your college resume"],
+      ["coaching", "Get your resume reviewed by a career coach"],
+      ["skill", "Upload your resume to Handshake"],
+      ["skill", "Set up LinkedIn with a free headshot"],
+    ],
+  },
+  {
+    season: "Fall",
+    yearOffset: -2,
+    month: 11,
+    milestone: {
+      kind: "networking",
+      title: "Joined the Computer Science Club @ IU",
+      description: "Weekly meetings and a project team.",
+      outcomes: ["Found friends a year ahead in CS", "Your first hackathon team"],
+    },
+    tasks: [
+      ["skill", "Browse clubs on BeInvolved"],
+      ["skill", "Go to two club meetings"],
+    ],
+  },
+  {
+    season: "Spring",
+    yearOffset: -1,
+    month: 2,
+    milestone: {
+      kind: "event",
+      title: "Went to the Spring Career Fair",
+      description: "Your first career fair.",
+      outcomes: ["Talked to 5 employers", "Learned what they want from freshmen"],
+    },
+    tasks: [
+      ["event", "Register for the Spring Career Fair in Handshake"],
+      ["networking", "Career fair strategy: pick 5 employers to meet"],
+      ["event", "Elevator pitch: 30 seconds about you"],
+    ],
+  },
+  {
+    season: "Fall",
+    yearOffset: -1,
+    month: 9,
+    milestone: {
+      kind: "event",
+      title: "Went to the Fall Career Fair",
+      description: "Your second fair, with a sharper pitch.",
+      outcomes: ["Talked to 8 employers", "2 recruiters asked you to apply"],
+    },
+    tasks: [
+      ["event", "Register for the Fall Career Fair in Handshake"],
+      ["networking", "Career fair strategy: pick 5 employers to meet"],
+      ["event", "Elevator pitch: 30 seconds about you"],
+      ["coaching", "Resume review before the fair"],
+    ],
+  },
+  {
+    season: "Fall",
+    yearOffset: -1,
+    month: 11,
+    milestone: {
+      kind: "certification",
+      title: "Earned the LinkedIn Learning Python Essential Training certificate",
+      description: "Finished it in four weekends.",
+      outcomes: ["A certificate on your LinkedIn", "Python you use in class every week"],
+    },
+    tasks: [
+      ["skill", "Pick a LinkedIn Learning certificate course"],
+      ["skill", "Finish the certificate course"],
+    ],
+  },
+  {
+    season: "Spring",
+    yearOffset: 0,
+    month: 4,
+    milestone: {
+      kind: "project",
+      title: "Built CourseMate, a course-planner web app",
+      description: "A portfolio project, start to finish, on GitHub.",
+      outcomes: ["Your first portfolio piece", "Used by 40 classmates"],
+    },
+    tasks: [
+      ["skill", "Pick a project that excites you"],
+      ["skill", "Finish and publish the project on GitHub"],
+    ],
+  },
+  {
+    season: "Spring",
+    yearOffset: 0,
+    month: 5,
+    milestone: {
+      kind: "experience",
+      title: "Software Engineering Intern @ Hoosier Logistics",
+      description: "Summer internship on the routing team.",
+      outcomes: ["Shipped 3 features to production", "A return offer conversation for next summer"],
+    },
+    tasks: [
+      ["skill", "Research companies that hire Luddy interns"],
+      ["application", "Apply to 6 software internships"],
+      ["coaching", "Mock interview for internships"],
+    ],
+  },
+  {
+    season: "Fall",
+    yearOffset: 0,
+    month: 8,
+    day: 25,
+    milestone: {
+      kind: "networking",
+      title: "Became events lead of the Computer Science Club",
+      description: "Elected at the first meeting of the year.",
+      outcomes: ["You run the club's speaker series"],
+    },
+    tasks: [["skill", "Run for a role in your club"]],
+  },
+];

@@ -188,8 +188,11 @@ export default async function StudentHome() {
 
         {(p.skills.length > 0 || nextSkill) && (
           <Tile href="/student/resources" className="bg-[#9ED8F5] text-[#0B2C3D]">
-            <span className="text-xs font-extrabold uppercase tracking-[.06em]">Skills leveled up</span>
-            <div className="mt-auto flex items-center gap-3.5">
+            <span className="text-xs font-extrabold uppercase tracking-[.06em]">{p.skills.length ? "Skills leveled up" : "Next skill"}</span>
+            {p.skills.length === 0 && nextSkill && (
+              <span className="mt-auto text-[22px] font-extrabold leading-tight tracking-tight">{short(nextSkill.title, 48)}</span>
+            )}
+            <div className={`mt-auto flex items-center gap-3.5 ${p.skills.length === 0 ? "hidden" : ""}`}>
               <span className="text-[68px] font-extrabold leading-[.9] tabular-nums">{p.skills.length}</span>
               <div className="flex min-w-0 flex-col gap-1">
                 {p.skills.slice(0, 3).map((s) => (
@@ -199,7 +202,11 @@ export default async function StudentHome() {
                 ))}
               </div>
             </div>
-            {nextSkill && <span className="text-sm font-bold">Next: {short(nextSkill.title, 40)}</span>}
+            {nextSkill && (
+              <span className="text-sm font-bold">
+                {p.skills.length === 0 ? "Your first one for this path. Start it this week." : `Next: ${short(nextSkill.title, 40)}`}
+              </span>
+            )}
           </Tile>
         )}
 

@@ -101,13 +101,15 @@ export function buildRoadData(input: {
     // Faded flags: what this semester usually holds, from the four-year guide. This semester's are crimson and
     // can be marked done from the road; past ones you didn't do quietly go away.
     const doneTitles = new Set(real.map((r) => r.title.toLowerCase()));
+    // A milestone already reached this semester, in the student's own words, replaces its faded flag.
+    const doneKeys = new Set(buckets[k].map((st) => milestoneKey(st, main?.name)).filter(Boolean));
     const planned: RoadItem[] =
       k < current
         ? []
         : plannedFor(k, slots.length).flatMap((m) => {
             const title = m.path && main ? m.title.replace("your path", main.name) : m.title;
             const win = pastTense(title);
-            if (doneTitles.has(win.toLowerCase())) return [];
+            if (doneTitles.has(win.toLowerCase()) || doneKeys.has(m.key)) return [];
             if (m.key === "fair" && real.some((r) => /career fair/i.test(r.title))) return [];
             const now = k === current;
             const fairDay = now && m.dated ? (input.fairDate ?? null) : null;
