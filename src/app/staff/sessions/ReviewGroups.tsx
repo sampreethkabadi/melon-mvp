@@ -1,9 +1,12 @@
 import { SubmitButton } from "@/components/SubmitButton";
 import { INSIGHT_LABEL, type InsightKind } from "@/lib/sessions/types";
+import { upcomingTerms } from "@/lib/roadmap/template";
+import { appNow } from "@/lib/clock";
 import { editInsight, reviewInsight } from "./actions";
+import { PlacementPicker, type GoalOption, type Placement } from "./PlacementPicker";
 
 type Segment = { id: string; idx: number; speaker: string; text: string };
-export type ReviewInsight = { id: string; kind: InsightKind; status: string; payload: { text: string }; insight_evidence: { segment_id: string }[] };
+export type ReviewInsight = { id: string; kind: InsightKind; status: string; payload: { text: string; placement?: Placement }; insight_evidence: { segment_id: string }[] };
 
 const GROUPS: Array<{ title: string; note?: string; kinds: InsightKind[]; tone: string }> = [
   { title: "Action items", note: "These become steps on the student's roadmap. At most 2 per session go on now, and the rest are saved for later.", kinds: ["action", "course_change"], tone: "border-done/40 bg-done-bg/50" },
@@ -12,7 +15,8 @@ const GROUPS: Array<{ title: string; note?: string; kinds: InsightKind[]; tone: 
 ];
 
 /** Action items and key points from a transcript, each with the lines behind it, to approve, edit or remove. */
-export function ReviewGroups({ sessionId, insights, segments, editable, linkLines }: { sessionId: string; insights: ReviewInsight[]; segments: Segment[]; editable: boolean; linkLines: string }) {
+export function ReviewGroups({ sessionId, insights, segments, editable, linkLines, goals = [] }: { sessionId: string; insights: ReviewInsight[]; segments: Segment[]; editable: boolean; linkLines: string; goals?: GoalOption[] }) {
+  const terms = upcomingTerms(appNow(), 6);
   return (
     <>
       {GROUPS.map((group) => {
@@ -25,7 +29,7 @@ export function ReviewGroups({ sessionId, insights, segments, editable, linkLine
               {group.note && <p className="text-xs text-muted">{group.note}</p>}
             </div>
             {rows.map((insight) => (
-              <Card key={insight.id} sessionId={sessionId} insight={insight} segments={segments} editable={editable} tone={group.tone} linkLines={linkLines} />
+              <Card key={insight.id} sessionId={sessionId} insight={insight} segments={segments} editable={editable} tone={group.tone} linkLines={linkLines} terms={terms} goals={goals} />
             ))}
           </section>
         );
@@ -36,7 +40,8 @@ export function ReviewGroups({ sessionId, insights, segments, editable, linkLine
 
 const STATUS: Record<string, string> = { accepted: "Approved", edited: "Edited and approved", rejected: "Removed" };
 
-function Card({ sessionId, insight, segments, editable, tone, linkLines }: { sessionId: string; insight: ReviewInsight; segments: Segment[]; editable: boolean; tone: string; linkLines: string }) {
+function Card({ sessionId, insight, segments, editable, tone, linkLines, terms, goals }: { sessionId: string; insight: ReviewInsight; segments: Segment[]; editable: boolean; tone: string; linkLines: string; terms: string[]; goals: GoalOption[] }) {
+  const isStep = insight.kind === "action" || insight.kind === "course_change";
   const evidence = insight.insight_evidence
     .map((e) => segments.find((s) => s.id === e.segment_id))
     .filter((s): s is Segment => Boolean(s))
@@ -63,6 +68,12 @@ function Card({ sessionId, insight, segments, editable, tone, linkLines }: { ses
           </a>
         ))}
       </p>
+      {isStep && !removed && editable && (
+        <PlacementPicker sessionId={sessionId} insightId={insight.id} placement={insight.payload.placement ?? null} terms={terms} goals={goals} />
+      )}
+      {isStep && !removed && !editable && insight.payload.placement && insight.payload.placement.as !== "task" && (
+        <p className="text-xs font-semibold text-ink-2">{placementLabel(insight.payload.placement, goals)}</p>
+      )}
       {editable && (
         <div className="flex flex-wrap items-center gap-3">
           {decided ? (
@@ -92,4 +103,10 @@ function Card({ sessionId, insight, segments, editable, tone, linkLines }: { ses
       )}
     </article>
   );
+}
+
+function placementLabel(p: NonNullable<Placement>, goals: GoalOption[]) {
+  if (p.as === "milestone") return `Went on the road as a milestone · ${p.term}`;
+  if (p.as === "goal") return `Under the goal: ${p.goal_title ?? goals.find((g) => g.id === p.goal_id)?.title ?? "a goal on their roadmap"}`;
+  return "Action item";
 }

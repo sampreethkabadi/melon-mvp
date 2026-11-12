@@ -272,3 +272,45 @@ export async function resolveFlag(sessionId: string, flagId: string, form: FormD
   });
   refresh(sessionId);
 }
+
+const Placement = z.union([
+  z.object({ as: z.literal("task") }),
+  z.object({ as: z.literal("milestone"), term: z.string().regex(/^(Spring|Fall) \d{4}$/) }),
+  z.object({ as: z.literal("goal"), goal_id: Id }),
+  z.object({ as: z.literal("goal"), goal_title: z.string().trim().min(2).max(80), term: z.string().regex(/^(Spring|Fall) \d{4}$/) }),
+]);
+export type PlacementInput = z.infer<typeof Placement>;
+
+/**
+ * Where an action item goes once approved: an action item, a milestone on the road, or an action item under a
+ * bigger goal. Saved on the suggestion; the database applies it (and checks it again) on approval.
+ */
+export async function placeInsight(sessionId: string, insightId: string, input: PlacementInput) {
+  const { supabase, session } = await ownSession(sessionId);
+  const placement = Placement.parse(input);
+  const { data: current } = await supabase
+    .from("insights")
+    .select("kind, payload")
+    .eq("id", Id.parse(insightId))
+    .eq("session_id", session.id)
+    .single();
+  if (!current || !["action", "course_change"].includes(current.kind)) throw new Error("Only action items can be placed.");
+  if (placement.as === "goal" && "goal_id" in placement) {
+    const { data: goal } = await supabase
+      .from("roadmap_items")
+      .select("id")
+      .eq("id", placement.goal_id)
+      .eq("student_id", session.student_id)
+      .eq("milestone", true)
+      .neq("status", "done")
+      .maybeSingle();
+    if (!goal) throw new Error("That goal isn't open on this student's roadmap.");
+  }
+  const { error } = await supabase
+    .from("insights")
+    .update({ payload: { ...(current.payload ?? {}), placement } })
+    .eq("id", insightId)
+    .eq("session_id", session.id);
+  if (error) throw new Error("Couldn't save where this goes. Try again.");
+  refresh(sessionId);
+}

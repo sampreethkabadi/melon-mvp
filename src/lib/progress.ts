@@ -49,7 +49,7 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
 
   const [{ data: acts }, { data: done }, { count: sessions }, { data: skillRows }, { data: team }, { data: staffSessions }] = await Promise.all([
     supabase.from("activities").select("kind, title, minutes, occurred_at").eq("student_id", studentId).gte("occurred_at", lastStart.toISOString()),
-    supabase.from("roadmap_items").select("title, kind, source, completed_at").eq("student_id", studentId).eq("status", "done"),
+    supabase.from("roadmap_items").select("title, kind, source, completed_at, milestone").eq("student_id", studentId).eq("status", "done"),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("student_id", studentId).eq("status", "reviewed"),
     supabase
       .from("insights")

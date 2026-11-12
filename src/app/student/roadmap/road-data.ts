@@ -50,8 +50,9 @@ export function buildRoadData(input: {
   );
   const buckets: Step[][] = slots.map(() => []);
   for (const s of input.steps) {
-    // Only finished milestones are flags. Tasks stay on Action items.
-    if (s.status !== "done" || !isMilestone(s)) continue;
+    // Only finished milestones are flags, plus milestones an advisor set (done or not). Tasks stay on Action items.
+    const advisorSet = s.milestone === true && s.status !== "skipped";
+    if ((s.status !== "done" && !advisorSet) || !isMilestone(s)) continue;
     const k = slotFor(slots, s.term, s.completed_at, input.term);
     // Past the fork, the road is the pinned path: steps for other paths wait on their own branch.
     if (k > fork && s.path_id && main && s.path_id !== main.id) continue;
@@ -78,7 +79,10 @@ export function buildRoadData(input: {
       const outcomes = (s.outcomes ?? []).filter(Boolean);
       // What the student did to get here: the action items behind this milestone.
       const key = milestoneKey(s, main?.name);
-      const did = tasksFor(key, input.steps, s.term ?? slot.term).filter((t) => t.status === "done");
+      // Action items an advisor put under this goal, then any that match it by wording.
+      const children = input.steps.filter((c) => c.parent_id === s.id && c.status !== "skipped");
+      const did = [...children, ...tasksFor(key, input.steps, s.term ?? slot.term)].filter((t) => t.status === "done");
+      const goal = s.milestone === true;
       const summary = did.length
         ? `You finished ${did.length === 1 ? "an action item" : `${did.length} action items`} to get here. Nice work.`
         : s.source === "student"
@@ -94,8 +98,10 @@ export function buildRoadData(input: {
         mine,
         about: summary,
         wins: outcomes,
-        tasks: did.map((t) => ({ title: t.title, done: true })),
-        href: key && k === current ? `/student/tasks?m=${key}` : "/student/tasks",
+        tasks: goal && state !== "done" ? children.map((t) => ({ title: t.title, done: t.status === "done" })) : did.map((t) => ({ title: t.title, done: true })),
+        href: goal && children.length ? `/student/tasks?m=goal-${s.id}` : key && k === current ? `/student/tasks?m=${key}` : "/student/tasks",
+        // A milestone the advisor set for this semester can be marked done right from its flag.
+        claim: goal && state === "open" && k === current ? { title: winLabel(s), kind: s.kind, ask: false, ready: true, itemId: s.id } : undefined,
       };
     });
     // Faded flags: what this semester usually holds, from the four-year guide. This semester's are crimson and
@@ -163,6 +169,7 @@ export function buildRoadData(input: {
         name: main.name,
         goal: main.first_job ?? main.name,
         color: "#14211B",
+        accent: color(main),
         ink: "#FFFFFF",
         tag: "Pinned",
         tagBg: "#14211B",

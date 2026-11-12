@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { isDailyConfigured } from "@/lib/daily";
+import { Video } from "lucide-react";
 import { notFound } from "next/navigation";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { SubmitButton } from "@/components/SubmitButton";
@@ -32,7 +34,7 @@ const SOURCE_NOTE: Record<string, string> = {
   audio: "Transcribed from the recording",
 };
 const MODEL_NOTE = (ref: string | null) =>
-  ref?.startsWith("claude") ? "Drafted by Claude" : ref === "saved-sample-v1" ? "Saved suggestions for the sample conversation" : "Drafted by simple rules, without AI";
+  ref?.startsWith("ollama:") ? `Drafted on this computer by an open-source model (${ref.slice(7)})` : ref?.startsWith("claude") ? "Drafted by Claude" : ref === "saved-sample-v1" ? "Saved suggestions for the sample conversation" : "Drafted by simple rules, without AI";
 
 export default async function SessionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -40,7 +42,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
   const supabase = await createClient();
   const { data: session } = await supabase
     .from("sessions")
-    .select("id, school_id, status, mode, transcript_source, session_type, student_id, staff_id, created_at, student:profiles!sessions_student_id_fkey(full_name)")
+    .select("id, school_id, status, mode, transcript_source, session_type, student_id, staff_id, created_at, call_room, student:profiles!sessions_student_id_fkey(full_name)")
     .eq("id", id)
     .maybeSingle();
   if (!session) notFound();
@@ -53,6 +55,15 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
     supabase.from("insights").select("id, kind, status, model_ref, payload, insight_evidence(segment_id)").eq("session_id", id).order("created_at"),
     supabase.from("insight_flags").select("id, insight_id, note, status, created_at").eq("session_id", id).eq("status", "open"),
   ]);
+  // Open goals and milestones on the student's roadmap, so an action item can go under one.
+  const { data: goalRows } = await supabase
+    .from("roadmap_items")
+    .select("id, title, term")
+    .eq("student_id", session.student_id)
+    .eq("milestone", true)
+    .neq("status", "done")
+    .order("created_at");
+  const goals = (goalRows ?? []) as Array<{ id: string; title: string; term: string | null }>;
   const flags = (flagRows ?? []) as Array<{ id: string; insight_id: string; note: string | null }>;
   const segments = (segmentRows ?? []) as Segment[];
   const insights = (insightRows ?? []) as unknown as Insight[];
@@ -85,6 +96,23 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </h1>
         {session.transcript_source && <p className="mt-1 text-sm text-muted">{SOURCE_NOTE[session.transcript_source]}</p>}
       </div>
+
+      {mine && (waiting || ["recording", "transcribed"].includes(status)) && isDailyConfigured() && (
+        <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-line bg-white/95 p-5">
+          <div>
+            <h2 className="text-lg font-extrabold">{session.call_room ? "Your video call is open" : "Meeting online?"}</h2>
+            <p className="text-sm text-muted">
+              {status === "transcribed"
+                ? `You and ${studentName.split(" ")[0]} are checking the transcript in the call.`
+                : `Start a Melon video call. ${studentName.split(" ")[0]} gets a link, and you both agree to recording inside the call.`}
+            </p>
+          </div>
+          <Link href={`/call/${id}`} className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-2.5 font-extrabold text-white">
+            <Video size={18} aria-hidden="true" />
+            {session.call_room ? (status === "transcribed" ? "Open the transcript" : "Rejoin the call") : "Start a video call"}
+          </Link>
+        </section>
+      )}
 
       {waiting && (
         <section className="flex flex-col gap-4 rounded-3xl border-2 bg-white/95 p-6" style={{ borderColor: "var(--school)" }}>
@@ -136,7 +164,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
         </form>
       )}
 
-      {["recording", "uploaded", "transcribed"].includes(status) && (
+      {["recording", "uploaded", "transcribed"].includes(status) && !(session.call_room && status !== "uploaded") && (
         <section className="rounded-3xl border border-line bg-white/95 p-6">
           {mine && <AutoRefresh />}
           <h2 className="text-lg font-extrabold">Working on it</h2>
@@ -231,7 +259,7 @@ export default async function SessionPage({ params }: { params: Promise<{ id: st
               </div>
             )}
             {insights.length === 0 && <p className="text-sm text-muted">Melon found nothing to suggest from this transcript.</p>}
-            <ReviewGroups sessionId={id} insights={insights} segments={segments} editable={status === "ready_for_review" && mine} linkLines="#line-" />
+            <ReviewGroups sessionId={id} insights={insights} segments={segments} editable={status === "ready_for_review" && mine} linkLines="#line-" goals={goals} />
             {status === "ready_for_review" && mine && (
               <form action={approveSession.bind(null, id)} className="flex flex-col gap-1.5">
                 <SubmitButton label={`Approve the rest · send to ${studentName.split(" ")[0]}`} />

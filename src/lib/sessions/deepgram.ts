@@ -28,3 +28,16 @@ export function utterancesToSegments(utterances: Utterance[]): Segment[] {
     text: u.transcript,
   }));
 }
+
+/** Transcribes one person's own microphone from a call. Everything on it is that person, so no speaker guessing. */
+// The audio itself is sent, not a link to it, so no link to a recording ever leaves the server.
+export async function transcribeTrack(audio: Blob): Promise<Array<{ start: number; end: number; transcript: string }>> {
+  const res = await fetch("https://api.deepgram.com/v1/listen?model=nova-3&utterances=true&smart_format=true", {
+    method: "POST",
+    headers: { Authorization: `Token ${process.env.DEEPGRAM_API_KEY}`, "Content-Type": audio.type || "audio/webm" },
+    body: audio,
+  });
+  if (!res.ok) throw new Error(`Speech-to-text failed with status ${res.status}.`);
+  const body = (await res.json()) as { results?: { utterances?: Utterance[] } };
+  return (body.results?.utterances ?? []).map((u) => ({ start: u.start, end: u.end, transcript: u.transcript }));
+}

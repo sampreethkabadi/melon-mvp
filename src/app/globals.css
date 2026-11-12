@@ -111,10 +111,22 @@ h1, h2, h3 {
 .road-face { transition: transform .12s; }
 .road-node:hover .road-face, .road-node:focus-visible .road-face { transform: translateY(3px); }
 .road-drift { animation: road-drift 5s ease-in-out infinite; }
+/* Switching paths: the new color sweeps from the fork to the goal, then fades into the dashed line. */
+@keyframes road-swap {
+  0% { stroke-dashoffset: 1; opacity: .85; }
+  65% { stroke-dashoffset: 0; opacity: .85; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes road-swappop { 0% { transform: scale(.5); opacity: 0; } 60% { transform: scale(1.12); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+@keyframes road-swapin { 0%, 30% { opacity: 0; } 100% { opacity: 1; } }
+.road-swap { stroke-dasharray: 1; animation: road-swap 1.7s cubic-bezier(.4, 0, .2, 1) both; }
+.road-swappop { animation: road-swappop .55s cubic-bezier(.3, 1.5, .5, 1) both; }
+.road-swapin { animation: road-swapin .9s ease-out both; }
 .road-spark { position: absolute; left: 28px; top: 28px; width: 9px; height: 9px; border-radius: 3px; opacity: 0; pointer-events: none; animation: road-burst .85s cubic-bezier(.2, .8, .3, 1) both; }
 @media (prefers-reduced-motion: reduce) {
   .road-av .road-body, .road-av.walking .road-leg1, .road-av.walking .road-leg2, .road-pulse, .road-ring, .road-plant, .road-fade, .road-late,
-  .road-wave, .road-goalwave, .road-draw, .road-float, .road-popin, .road-drift { animation: none; }
+  .road-wave, .road-goalwave, .road-draw, .road-float, .road-popin, .road-drift, .road-swappop, .road-swapin { animation: none; }
+  .road-swap { display: none; }
   .road-draw { stroke-dasharray: none; }
   .road-spark, .road-trail { display: none; }
 }
@@ -191,4 +203,85 @@ input[type="file"],
 @keyframes melon-drain {
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
+}
+
+/*
+ * Clear clickables. Every button, link and expandable row reacts to the cursor, and each kind reacts the
+ * same way everywhere, so it's obvious what you can click:
+ *   pill buttons and pill links  lift with a shadow, and press in
+ *   cards and boxes that open    lift, darken their border and gain a shadow
+ *   text links                   underline
+ *   expandable rows              tint
+ *   anything disabled            a "not allowed" cursor and no reaction
+ * The kinds are read from the classes the app already uses (rounded-full, text-link and so on), so new
+ * screens get this for free. These sit in the components layer, so a screen's own hover classes still win.
+ */
+@layer components {
+  :where(a[href], button, summary, [role="button"], [role="switch"]) {
+    transition-property: color, background-color, border-color, box-shadow, opacity, translate, scale, text-decoration-color;
+    transition-duration: 180ms;
+    transition-timing-function: var(--ease-apple);
+  }
+  :where(a[href], button, summary, [role="button"], [role="switch"], input, select, textarea):focus-visible {
+    outline: 3px solid var(--school, #990000);
+    outline-offset: 2px;
+  }
+  :where(button, [role="button"], [role="switch"]):disabled { cursor: not-allowed; }
+
+  /* Pill buttons and links */
+  :where(a[href], button:not(:disabled), [role="switch"]:not(:disabled))[class*="rounded-full"]:hover {
+    translate: 0 -2px;
+    box-shadow: 0 8px 18px -8px rgb(20 33 27 / 0.5);
+  }
+  :where(a[href], button:not(:disabled), [role="switch"]:not(:disabled))[class*="rounded-full"]:active {
+    translate: 0 0;
+    scale: 0.96;
+    box-shadow: none;
+    transition-duration: 90ms;
+  }
+
+  /* Cards and boxes that open something */
+  :where(a[href], button:not(:disabled)):is([class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-3xl"]):not(.tile-hover):hover {
+    translate: 0 -2px;
+    border-color: var(--color-ink);
+    box-shadow: 0 12px 26px -14px rgb(20 33 27 / 0.45);
+  }
+  :where(a[href], button:not(:disabled)):is([class*="rounded-xl"], [class*="rounded-2xl"], [class*="rounded-3xl"]):not(.tile-hover):active {
+    translate: 0 0;
+    scale: 0.985;
+    box-shadow: none;
+    transition-duration: 90ms;
+  }
+
+  /* Small square buttons, like the tick boxes on Action items */
+  :where(button:not(:disabled))[class*="rounded-lg"]:hover { scale: 1.1; box-shadow: 0 4px 10px -4px rgb(20 33 27 / 0.45); }
+
+  /* Text links, including links styled as buttons and expanders */
+  :where(a[href], button:not(:disabled), summary)[class*="text-link"]:hover,
+  :where(a[href])[class~="underline"]:hover,
+  :where(a[href]):not([class]):hover {
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+  :where(a[href])[class~="underline"]:hover { text-decoration-color: var(--school, currentColor); }
+
+  /* Expandable rows tint; other expanders underline like links */
+  summary[class*="list-none"]:hover { background-color: rgb(20 33 27 / 0.04); }
+  summary:not([class*="list-none"]):hover {
+    text-decoration-line: underline;
+    text-decoration-thickness: 2px;
+    text-underline-offset: 4px;
+  }
+
+  /* The tab you're on dims slightly */
+  nav a[href][aria-current]:hover { opacity: 0.7; }
+
+  /* Top navigation: the underline appears under the tab you point at */
+  nav a[href]:not([aria-current]):hover { border-bottom-color: rgb(20 33 27 / 0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(a[href], button, summary, [role="button"], [role="switch"]):hover,
+  :where(a[href], button, summary, [role="button"], [role="switch"]):active { translate: none !important; scale: none !important; }
 }

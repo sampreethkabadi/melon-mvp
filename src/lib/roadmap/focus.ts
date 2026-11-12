@@ -21,6 +21,10 @@ export type Step = {
   created_at: string;
   /** What the student got out of it, shown on the road. Empty until someone writes it. */
   outcomes?: string[] | null;
+  /** Set by the advisor: true puts it on the road as a milestone, false keeps it off. Null lets the app decide. */
+  milestone?: boolean | null;
+  /** The goal (a milestone) this action item leads to, when the advisor grouped it under one. */
+  parent_id?: string | null;
 };
 
 /** Earlier semesters first, then firm dates, then the soonest due date, then the order they were added. */

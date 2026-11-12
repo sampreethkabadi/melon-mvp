@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { SubmitButton } from "@/components/SubmitButton";
 import { createClient } from "@/lib/supabase/server";
@@ -5,6 +6,8 @@ import { answerConsent } from "./actions";
 
 type LiveSession = {
   id: string;
+  call_room: string | null;
+  status: string;
   staff: { full_name: string } | null;
   consents: Array<{ subject_id: string; granted: boolean; scope: string; created_at: string }>;
 };
@@ -14,9 +17,9 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
   const supabase = await createClient();
   const { data } = await supabase
     .from("sessions")
-    .select("id, staff:profiles!sessions_staff_id_fkey(full_name), consents(subject_id, granted, scope, created_at)")
+    .select("id, call_room, status, staff:profiles!sessions_staff_id_fkey(full_name), consents(subject_id, granted, scope, created_at)")
     .eq("student_id", studentId)
-    .in("status", ["created", "consented", "recording"])
+    .in("status", ["created", "consented", "recording", "transcribed"])
     .order("created_at", { ascending: false })
     .limit(1);
   const session = ((data ?? [])[0] ?? null) as unknown as LiveSession | null;
@@ -27,6 +30,26 @@ export async function ConsentCard({ studentId }: { studentId: string }) {
     .sort((a, b) => a.created_at.localeCompare(b.created_at))
     .at(-1);
   const name = session.staff?.full_name ?? "Your advisor";
+  // A Melon video call: the recording question is asked inside the call, next to the video.
+  if (session.call_room) {
+    return (
+      <section className="flex flex-col items-start gap-3 rounded-3xl border-2 border-new bg-new-bg p-6">
+        <AutoRefresh ms={5000} />
+        <h2 className="text-lg font-extrabold text-new-ink">
+          {session.status === "transcribed" ? "Check the transcript from your call" : `${name} opened your video call`}
+        </h2>
+        <p>
+          {session.status === "transcribed"
+            ? "Fix anything that was heard wrong before the notes are made."
+            : "Join from here. If you're asked about recording, you can say yes or no inside the call, and change your mind any time."}
+        </p>
+        <Link href={`/call/${session.id}`} className="rounded-full bg-ink px-5 py-2.5 font-extrabold text-white">
+          {session.status === "transcribed" ? "Open the transcript" : "Join the video call"}
+        </Link>
+      </section>
+    );
+  }
+  if (session.status === "transcribed") return <AutoRefresh ms={5000} />;
   return (
     <section className="flex flex-col gap-3 rounded-3xl border-2 border-new bg-new-bg p-6">
       <AutoRefresh ms={5000} />
