@@ -5,7 +5,7 @@ import type { NavItem } from "@/lib/nav";
 import type { Profile } from "@/lib/types";
 import { ROLE_LABEL } from "@/lib/types";
 
-export function TopBar({ profile, nav, bell }: { profile: Profile; nav: NavItem[]; bell?: { href: string; unread: number } }) {
+export function TopBar({ profile, nav, bell, profileHref }: { profile: Profile; nav: NavItem[]; bell?: { href: string; unread: number }; profileHref?: string }) {
   const school = profile.schools;
   const initials = profile.full_name
     .replace(/^Dr\.?\s+/i, "")
@@ -46,18 +46,27 @@ export function TopBar({ profile, nav, bell }: { profile: Profile; nav: NavItem[
               {bell.unread > 0 && <span className="absolute right-1.5 top-1.5 size-2.5 rounded-full border-2 border-white bg-melon" />}
             </Link>
           )}
-          <span className="hidden text-right sm:flex sm:flex-col">
-            <b className="text-sm">{profile.full_name}</b>
-            <span className="text-xs text-muted">{profile.title || ROLE_LABEL[profile.role]}</span>
-          </span>
-          <span className="inline-flex size-9 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">
-            {initials}
-          </span>
-          <form action="/auth/signout" method="post">
-            <button className="rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold hover:border-ink">
-              Sign out
-            </button>
-          </form>
+          {profileHref ? (
+            <Link
+              href={profileHref}
+              aria-label="Your profile"
+              title="Your profile"
+              className="inline-flex size-10 items-center justify-center rounded-full bg-lime text-sm font-extrabold text-ink ring-2 ring-white transition-shadow hover:ring-ink"
+            >
+              {initials}
+            </Link>
+          ) : (
+            <>
+              <span className="hidden text-right sm:flex sm:flex-col">
+                <b className="text-sm">{profile.full_name}</b>
+                <span className="text-xs text-muted">{profile.title || ROLE_LABEL[profile.role]}</span>
+              </span>
+              <span className="inline-flex size-9 items-center justify-center rounded-full bg-ink text-xs font-bold text-white">{initials}</span>
+              <form action="/auth/signout" method="post">
+                <button className="rounded-full border border-line bg-white px-3 py-1.5 text-sm font-semibold hover:border-ink">Sign out</button>
+              </form>
+            </>
+          )}
         </div>
       </div>
     </header>

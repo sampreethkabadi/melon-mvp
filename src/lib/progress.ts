@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { appNow } from "@/lib/clock";
+import { isMilestone, winLabel } from "@/lib/roadmap/milestones";
 import { currentSemester, type Semester } from "@/lib/roadmap/semester";
 
 // Everything the Home dashboard and Rewards tab count. Numbers only come from things Melon tracked:
@@ -39,7 +40,7 @@ export type Progress = {
 };
 
 type Activity = { kind: string; title: string; minutes: number; occurred_at: string };
-type DoneItem = { title: string; kind: string; completed_at: string | null };
+type DoneItem = { title: string; kind: string; source: string; completed_at: string | null };
 
 export async function getProgress(supabase: SupabaseClient, studentId: string, now = appNow()): Promise<Progress> {
   const sem = currentSemester(now);
@@ -48,7 +49,7 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
 
   const [{ data: acts }, { data: done }, { count: sessions }, { data: skillRows }, { data: team }, { data: staffSessions }] = await Promise.all([
     supabase.from("activities").select("kind, title, minutes, occurred_at").eq("student_id", studentId).gte("occurred_at", lastStart.toISOString()),
-    supabase.from("roadmap_items").select("title, kind, completed_at").eq("student_id", studentId).eq("status", "done"),
+    supabase.from("roadmap_items").select("title, kind, source, completed_at").eq("student_id", studentId).eq("status", "done"),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("student_id", studentId).eq("status", "reviewed"),
     supabase
       .from("insights")
@@ -98,17 +99,16 @@ export async function getProgress(supabase: SupabaseClient, studentId: string, n
     ...((staffSessions ?? []) as Array<{ staff_id: string }>).map((s) => s.staff_id),
   ]).size;
 
-  // The biggest moment: an event you went to beats a step you ticked off.
+  // The biggest moment: a milestone this semester (the same wins the road shows), else an event you went to.
+  // Chores like registering never count.
   const latest = <T,>(xs: T[], at: (x: T) => string) => [...xs].sort((a, b) => at(b).localeCompare(at(a)))[0];
-  const doneEvent = latest(termDone.filter((d) => d.kind === "event"), (d) => d.completed_at!);
+  const win = latest(termDone.filter((d) => isMilestone({ ...d, status: "done" })), (d) => d.completed_at!);
   const loggedEvent = latest(termActs.filter((a) => a.kind === "event"), (a) => a.occurred_at);
-  const big = doneEvent
-    ? { title: doneEvent.title, when: doneEvent.completed_at! }
+  const big = win
+    ? { title: winLabel({ ...win, status: "done" }), when: win.completed_at! }
     : loggedEvent
       ? { title: `You went to ${loggedEvent.title}`, when: loggedEvent.occurred_at }
-      : termDone.length
-        ? { title: latest(termDone, (d) => d.completed_at!).title, when: latest(termDone, (d) => d.completed_at!).completed_at! }
-        : null;
+      : null;
 
   return {
     sem,

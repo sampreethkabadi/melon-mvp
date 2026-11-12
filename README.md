@@ -17,6 +17,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 3c | Both sides accept the roadmap, concerns stay with staff, sign-in by emailed code | ✅ |
 | 4b | Advisor view: suggestions on accepted roadmaps, approval queue, student overview, meeting prep | ✅ |
 | 3d | Candy road: semesters as buttons, flags for what you did, a hover summary, the path fork in junior fall, adding your own wins | ✅ |
+| 3e | Design review: Sessions renamed Appointments, Home as one clickable dashboard, Action items with a Career Fair plan and undo, team avatars, a Profile page, per-job lists, Jake's-style sample resumes | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -58,10 +59,11 @@ Open `https://YOUR-VERCEL-LINK/api/dev/seed?secret=YOUR_SEED_SECRET` in a browse
 - **Demo day:** Thursday, Sep 3, 2026. The Fall Career Fair is Sep 17–18, and the career center's events (resume drop-in, pitch workshop, mock fair, alumni chat) are dated around it.
 - **Advisors (courses and policy):** `lee@`, `malik@`, `becker@melon.test`, with 4 students each
 - **Career coach (careers):** `rivera@melon.test`, assigned to everyone. `admin@melon.test` (admin)
-- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
+- **Lee's students:** `leo@` (freshman), `maya@` (junior, published roadmap and 2 past coach sessions), `taylor@` (junior who has used Melon since freshman fall: nearly every milestone from the Luddy four-year guide, each with the action items behind it, and 3 past coach sessions), `sam@` (junior), `priya@` (senior, draft waiting for review), all `@melon.test`
 - **Other students:** `ava@`, `daniel@`, `nina@`, `omar@` (Malik), `grace@`, `tyler@`, `zoe@`, `marcus@` (Becker), all `@melon.test`
 - Demo-day appointments, each with the type the student booked (for example Maya: Course planning with Lee, Career fair preparation with Rivera)
-- A short "start here, then this" list per path and year, clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations
+- A short "start here, then this" list per path and year (juniors and up: per job, for 12 common jobs), clubs on beInvolved, career center events, alumni stories, 3 rewards, 5 integrations
+- Past semesters for Maya, Priya and Sam: courses (as if from school records) and jobs and projects (as if from their resumes), so their roads look lived-in
 
 Sign in to test accounts with **Have a test account? Use a password** and your `SEED_PASSWORD`.
 
@@ -80,12 +82,12 @@ A roadmap is final only when both sides agree. The advisor or coach clicks **App
 
 Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
-1. **Maya, Home:** what matters this week on top (next step, next session, closest reward), her semester recap below. **Roadmap:** her candy road. Semesters 1 to 4 are done; tap one to plant its flags (no courses, just what she did), and hover a flag to see what it was about and what she got out of it. Fall '26 is open, with the road forking into her paths right after it. Below the road: 3 steps now, 2 more that unlock, and "Building your path" for her pinned path (Data analyst).
+1. **Maya, Home:** one dashboard. Every card opens what it's about and ends with the next thing to do: the Career Fair countdown and her fair steps, her next appointment, skills, career vibe, streak and swag. **Action items:** her fair steps as one numbered plan, then Upcoming and Done this semester. Tick a step: Undo stays for 4 seconds, then it moves to Done. Her avatar (top right) opens **Profile** with her team. **Roadmap:** her candy road. Flags are milestones only (things she'd put on a resume), worded as wins. Semesters 1 to 4 are done; tap one to plant its green flags and hover one for a short summary. This semester's milestones are faded crimson flags: hover the Fall Career Fair to see its 4 action items, or mark "Take a leadership role" done with **I did this** and watch it turn green. **See details** on any flag lists the action items behind it. Later semesters show faded milestones from the Luddy four-year guide. To show **Did you go?** on the fair flag, set `NEXT_PUBLIC_DEMO_TODAY=2026-09-18` and open the seed link again.
 2. **Rivera, Today:** open Maya's briefing (Career fair preparation), then **Start session** and **I agree to record**. **Maya, Home:** **I agree**.
 3. **Rivera:** **Use the sample conversation**. Check the highlights, remove or edit anything wrong, then **Looks good · send to Maya**. One click; nothing else to approve.
-4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 sessions). **Claim it** gives a pickup code.
+4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 appointments). **Claim it** gives a pickup code.
 5. **Maya, Roadmap:** **Switch my pin to this path**. Juniors and up pin one path, so Data analyst pauses its steps, and "Building your path" and **Resources** switch to cybersecurity. Pin Data analyst again and its steps come back.
-6. **Maya, Sessions:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
+6. **Maya, Appointments:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
 7. **Lee, Today:** Maya's **Course planning** session. Advisor samples stay on courses and policy, and their steps are course steps.
 8. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, and the roadmap shows as a short card with the full version one click away.
 
@@ -131,7 +133,7 @@ npm run dev                  # http://localhost:3000
 
 ## Resumes, roadmaps and AI
 
-Resume text is read with plain rules on our own server, and email and phone aren't kept. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
+Resume text is read with plain rules on our own server, and email and phone aren't kept. Dated jobs, research and projects are kept so the road can place them in the right semester. Testers upload the invented sample resumes in `public/samples/` (sources in `docs/sample-resumes/`), never a real one. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
 
 **Known gap:** audio isn't deleted automatically yet. `recordings.delete_after` is set to 30 days, but nothing acts on it. Add a scheduled job before using anything other than mock data.
 

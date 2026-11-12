@@ -42,7 +42,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
   const event = resource?.type === "event" && resource.starts_at ? resource : null;
   const toward = rewards.all.find((r) => !r.unlocked && r.rule.kind === (step.kind === "event" ? "events" : "streak_weeks")) ?? rewards.next;
   const origin = from
-    ? `${from.staff?.full_name ?? "Your coach"} added this after your ${from.session_type?.toLowerCase() ?? "session"} on ${shortDate(from.created_at)}.`
+    ? `${from.staff?.full_name ?? "Your coach"} added this after your ${from.session_type?.toLowerCase() ?? "appointment"} on ${shortDate(from.created_at)}.`
     : step.source === "student"
       ? step.resource_id
         ? "You added this from your resources."
@@ -71,7 +71,7 @@ export default async function StepPage({ params, searchParams }: { params: Promi
         <Panel className="gap-5 sm:p-7">
           <div className="flex flex-wrap gap-2">
             <Pill>{KIND_LABEL[step.kind] ?? step.kind}</Pill>
-            {step.due_date && <Pill tone={step.firm ? "firm" : "plain"}>{step.firm ? `Due ${shortDate(step.due_date)} · firm deadline` : `By ${shortDate(step.due_date)}`}</Pill>}
+            {step.due_date && <Pill tone={step.firm ? "firm" : "plain"}>{step.firm ? `${shortDate(step.due_date)} · date can't move` : `By ${shortDate(step.due_date)}`}</Pill>}
             <Pill tone="ok">{path ? `For ${path.name}` : "Counts for every path"}</Pill>
             {step.status === "paused" && <Pill>Paused</Pill>}
             {done && <Pill tone="ok">Done {step.completed_at ? shortDate(step.completed_at) : ""}</Pill>}

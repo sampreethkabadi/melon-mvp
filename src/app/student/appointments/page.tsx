@@ -1,15 +1,19 @@
 import Link from "next/link";
+import { CalendarPlus, ChevronDown, Clock, FileText, Flag, MapPin, Mic, Video } from "lucide-react";
 import { Backdrop } from "@/components/Backdrop";
 import { SubmitButton } from "@/components/SubmitButton";
+import { Avatar } from "@/components/student/Avatar";
 import { Pill } from "@/components/student/ui";
 import { requireRole } from "@/lib/auth";
-import { longDate, plural, timeOf } from "@/lib/format";
+import { daysUntil } from "@/lib/roadmap/fair";
+import { appNow } from "@/lib/clock";
+import { longDate, shortDate, timeOf } from "@/lib/format";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { Role } from "@/lib/types";
 import { flagHighlight } from "../actions";
 
-export const metadata = { title: "Sessions · Melon" };
+export const metadata = { title: "Appointments · Melon" };
 
 type Staff = { full_name: string; role: Role } | null;
 type Appointment = { id: string; starts_at: string; duration_min: number; type: string; modality: string; location: string | null; staff: Staff };
@@ -29,7 +33,7 @@ const GROUPS = [
   { title: "Skills that came up", kinds: ["skill"], box: "border-[#5AB8E6]/50 bg-[#EAF6FC]", label: "text-link", dot: "bg-[#5AB8E6]" },
 ];
 
-export default async function SessionsPage({ searchParams }: { searchParams: Promise<{ transcript?: string }> }) {
+export default async function AppointmentsPage({ searchParams }: { searchParams: Promise<{ transcript?: string }> }) {
   const { transcript } = await searchParams;
   const profile = await requireRole(["student"]);
   const supabase = await createClient();
@@ -73,62 +77,92 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
     }
   }
 
+  const today = appNow().toISOString();
   return (
-    <main className="relative mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
+    <main className="relative mx-auto flex max-w-4xl flex-col gap-7 px-4 py-8 sm:px-6">
       <Backdrop interests={sp?.interests ?? []} />
       <div>
-        <h1 className="text-3xl font-extrabold tracking-tight">Sessions</h1>
-        <p className="mt-1 text-ink-2">
-          {sessions.length
-            ? `${plural(sessions.length, "session")} so far. Just the highlights, checked by your advisor or coach.`
-            : "After your first session, the highlights show up here."}
-        </p>
+        <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl">Appointments</h1>
+        <p className="mt-1 text-ink-2">Book through the career center as usual. It shows up here.</p>
       </div>
 
       <section className="flex flex-col gap-3">
-        <h2 className="text-lg font-extrabold">Coming up</h2>
+        <h2 className="text-xl font-extrabold">Coming up</h2>
         {appts.length ? (
-          appts.map((a) => (
-            <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 bg-white/95 p-4" style={{ borderColor: "var(--school)" }}>
-              <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                  <b>{a.type}</b>
-                  <RolePill staff={a.staff} />
-                </div>
-                <p className="text-sm text-muted">
-                  with {a.staff?.full_name ?? "your team"} · {longDate(a.starts_at)} · {timeOf(a.starts_at)} · {a.duration_min} min ·{" "}
-                  {MODALITY[a.modality] ?? a.modality}
-                  {a.location ? ` · ${a.location}` : ""}
-                </p>
-              </div>
-              <span className="rounded-full bg-soft px-3 py-1 text-xs font-bold text-ink-2">They&apos;ll ask before recording</span>
-            </div>
-          ))
+          <div className="grid gap-4 sm:grid-cols-2">
+            {appts.map((a, i) => {
+              const days = daysUntil(today, a.starts_at);
+              const Where = a.modality === "in_person" ? MapPin : Video;
+              return (
+                <article
+                  key={a.id}
+                  className={`anim-fade-up flex flex-col gap-4 rounded-3xl bg-white/95 p-5 ${i === 0 ? "border-2" : "border border-line"}`}
+                  style={i === 0 ? { borderColor: "var(--school)", animationDelay: `${i * 60}ms` } : { animationDelay: `${i * 60}ms` }}
+                >
+                  <div className="flex items-center gap-4">
+                    {a.staff ? <Avatar name={a.staff.full_name} role={a.staff.role} size={60} /> : null}
+                    <div className="min-w-0">
+                      <span className={`text-xs font-extrabold uppercase tracking-[.08em] ${i === 0 ? "text-school" : "text-muted"}`} style={i === 0 ? { color: "var(--school)" } : undefined}>
+                        {days <= 0 ? "Today" : days === 1 ? "Tomorrow" : `In ${days} days`}
+                      </span>
+                      <b className="block text-lg leading-snug">{a.type}</b>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1.5 text-[15px] text-ink-2">
+                    <span className="flex items-center gap-2">
+                      <Clock size={16} aria-hidden="true" />
+                      {longDate(a.starts_at)} · {timeOf(a.starts_at)} · {a.duration_min} min
+                    </span>
+                    <span className="flex items-center gap-2">
+                      <Where size={16} aria-hidden="true" />
+                      {a.location ?? MODALITY[a.modality] ?? a.modality}
+                    </span>
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-1.5 text-[13px] font-bold text-muted">
+                      <Mic size={15} aria-hidden="true" />
+                      Asks before recording
+                    </span>
+                    <a
+                      href={calendarLink(a)}
+                      target="_blank"
+                      rel="noreferrer"
+                      aria-label={`Add ${a.type} to your calendar`}
+                      title="Add to calendar"
+                      className="inline-flex size-11 items-center justify-center rounded-full border border-line bg-white hover:border-ink"
+                    >
+                      <CalendarPlus size={18} aria-hidden="true" />
+                    </a>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         ) : (
-          <p className="rounded-2xl border border-line bg-white/90 px-4 py-3 text-sm text-muted">Nothing booked. Book through your career center as usual, and it shows up here.</p>
+          <p className="rounded-2xl border border-line bg-white/90 px-4 py-3 text-sm text-muted">Nothing booked yet.</p>
         )}
-        <p className="text-xs text-muted">Career coaches help with careers: interviews, resumes, LinkedIn, the career fair and internships. Your advisor helps with courses and graduation requirements.</p>
       </section>
 
       {sessions.length > 0 && (
-        <section className="flex flex-col gap-4">
-          <h2 className="text-lg font-extrabold">Past sessions</h2>
+        <section className="flex flex-col gap-3">
+          <h2 className="text-xl font-extrabold">Past</h2>
           {sessions.map((s, idx) => {
             const mine = insights.filter((i) => i.session_id === s.id);
             const summary = mine.find((i) => i.kind === "summary")?.payload.text;
             const doneSteps = new Set(advice.filter((a) => a.session_id === s.id && a.status === "done").map((a) => a.text));
             return (
-              <details key={s.id} open={idx === 0 || s.id === transcript} className="rounded-3xl border border-line bg-white/95 p-5">
-                <summary className="flex cursor-pointer flex-wrap items-center gap-2">
-                  <span className="text-base font-extrabold">
-                    {longDate(s.created_at)} · {s.session_type ?? "Session"}
+              <details key={s.id} open={idx === 0 || s.id === transcript} className="group overflow-hidden rounded-3xl border border-line bg-white/95">
+                <summary className="flex min-h-[72px] cursor-pointer list-none items-center gap-3.5 px-5 py-3.5 [&::-webkit-details-marker]:hidden">
+                  {s.staff && <Avatar name={s.staff.full_name} role={s.staff.role} size={44} badge={false} />}
+                  <b className="min-w-0 flex-1 text-base sm:text-[17px]">{s.session_type ?? "Appointment"}</b>
+                  {s.mode === "notes_only" && <Pill>Notes only</Pill>}
+                  <span className="shrink-0 text-sm font-semibold text-muted">{shortDate(s.created_at)}
+                    {s.created_at.slice(0, 4) !== today.slice(0, 4) ? `, ${s.created_at.slice(0, 4)}` : ""}
                   </span>
-                  <span className="text-sm text-muted">with {s.staff?.full_name ?? "your team"}</span>
-                  <RolePill staff={s.staff} />
-                  {s.mode === "notes_only" && <Pill>Notes, not recorded</Pill>}
+                  <ChevronDown size={20} aria-hidden="true" className="shrink-0 text-muted transition-transform duration-300 group-open:rotate-180" />
                 </summary>
-                <div className="mt-3 flex flex-col gap-3">
-                  {summary && <p className="text-ink-2">{summary}</p>}
+                <div className="anim-fade-up flex flex-col gap-3.5 px-5 pb-5">
+                  {summary && <p className="leading-relaxed text-ink-2">{summary}</p>}
                   <div className="grid gap-3 sm:grid-cols-2">
                     {GROUPS.map((g) => {
                       const items = mine.filter((i) => g.kinds.includes(i.kind) && i.payload.text);
@@ -159,13 +193,14 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
                           ))}
                           {!lines.length && <li className="text-muted">No transcript was kept.</li>}
                         </ol>
-                        <Link href="/student/sessions" scroll={false} className="mt-2 inline-block text-sm font-semibold text-link">
+                        <Link href="/student/appointments" scroll={false} className="mt-2 inline-block text-sm font-semibold text-link">
                           Hide transcript
                         </Link>
                       </details>
                     ) : (
-                      <Link href={`/student/sessions?transcript=${s.id}`} scroll={false} className="self-start text-sm font-semibold text-link">
-                        Expand the full transcript
+                      <Link href={`/student/appointments?transcript=${s.id}`} scroll={false} className="flex items-center gap-1.5 self-start text-sm font-bold text-link">
+                        <FileText size={16} aria-hidden="true" />
+                        Full transcript
                       </Link>
                     ))}
                 </div>
@@ -178,9 +213,18 @@ export default async function SessionsPage({ searchParams }: { searchParams: Pro
   );
 }
 
-function RolePill({ staff }: { staff: Staff }) {
-  if (!staff) return null;
-  return staff.role === "coach" ? <Pill tone="new">Career coach · career</Pill> : <Pill>Advisor · courses</Pill>;
+/** A Google Calendar link with the appointment filled in. Works without connecting anything. */
+function calendarLink(a: Appointment) {
+  const start = new Date(a.starts_at);
+  const end = new Date(start.getTime() + a.duration_min * 60_000);
+  const fmt = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const q = new URLSearchParams({
+    action: "TEMPLATE",
+    text: `${a.type}${a.staff ? ` with ${a.staff.full_name}` : ""}`,
+    dates: `${fmt(start)}/${fmt(end)}`,
+    location: a.location ?? MODALITY[a.modality] ?? "",
+  });
+  return `https://calendar.google.com/calendar/render?${q}`;
 }
 
 function Highlight({ insight, dot, done, flag }: { insight: Insight; dot: string; done: boolean; flag?: string }) {
@@ -197,10 +241,13 @@ function Highlight({ insight, dot, done, flag }: { insight: Insight; dot: string
         </span>
       ) : (
         <details className="ml-4">
-          <summary className="cursor-pointer text-xs font-semibold text-muted hover:text-ink">{flag === "fixed" ? "Fixed · flag again" : "Flag a mistake"}</summary>
+          <summary className="flex cursor-pointer items-center gap-1 text-xs font-semibold text-muted hover:text-ink">
+            <Flag size={12} aria-hidden="true" />
+            {flag === "fixed" ? "Fixed · flag again" : "Flag a mistake"}
+          </summary>
           <form action={flagHighlight.bind(null, insight.id)} className="mt-1.5 flex flex-col items-start gap-1.5">
             <textarea name="note" rows={2} maxLength={500} placeholder="What's wrong? (optional)" aria-label="What's wrong" className="w-full rounded-xl border border-line bg-white px-3 py-2 text-sm" />
-            <SubmitButton label="Send to my advisor or coach" variant="secondary" />
+            <SubmitButton label="Send to my team" variant="secondary" />
           </form>
         </details>
       )}

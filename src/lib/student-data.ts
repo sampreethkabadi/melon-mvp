@@ -1,7 +1,9 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { levelFor, type Level } from "@/lib/catalog";
+import { jobKeyFor, levelFor, type Level } from "@/lib/catalog";
 import { appNow } from "@/lib/clock";
+import { daysUntil, isFairStep, nextFair } from "@/lib/roadmap/fair";
+import { currentSemester } from "@/lib/roadmap/semester";
 import type { ClassYear } from "@/lib/types";
 
 // What the student pages share: their roadmap, paths and steps, and the short "start here" ladder for
@@ -70,21 +72,28 @@ export async function loadRoadmap(supabase: SupabaseClient, studentId: string) {
 export const pinLimit = (year: ClassYear | null) => (year === "freshman" || year === "sophomore" ? 2 : 1);
 
 /** "Start here, then this, then this" for each pinned path, at the student's year level. */
+/**
+ * "Start here, then this, then this" for each pinned path. Juniors and up get the list for the exact job
+ * they pinned (Data analyst and ML engineer differ). Freshmen and sophomores, whose paths are broad areas,
+ * get the gentler list for that area at their year's level. `more` is the rest, for the Resources tab.
+ */
 export async function pathLadders(supabase: SupabaseClient, pinned: Path[], year: ClassYear | null) {
-  const interests = [...new Set(pinned.map((p) => p.interest).filter((i): i is string => Boolean(i)))];
-  if (!interests.length) return [];
-  const level = levelFor(year);
-  const { data } = await supabase
-    .from("resources")
-    .select(RESOURCE_COLUMNS)
-    .eq("level", level)
-    .overlaps("interests", interests)
-    .order("step");
-  const rows = (data ?? []) as Resource[];
-  return pinned
-    .filter((p) => p.interest)
-    .map((p) => ({ path: p, rungs: rows.filter((r) => r.interests.includes(p.interest!)).slice(0, 3) }))
-    .filter((l) => l.rungs.length);
+  const early = year === "freshman" || year === "sophomore";
+  const out: Array<{ path: Path; job: string | null; rungs: Resource[]; more: Resource[] }> = [];
+  for (const p of pinned) {
+    const job = early ? null : jobKeyFor(p.name, p.first_job);
+    let rows: Resource[] = [];
+    if (job) {
+      const { data } = await supabase.from("resources").select(RESOURCE_COLUMNS).contains("tags", [`job:${job}`]).order("step");
+      rows = (data ?? []) as Resource[];
+    }
+    if (!rows.length && p.interest) {
+      const { data } = await supabase.from("resources").select(RESOURCE_COLUMNS).eq("level", levelFor(year)).contains("interests", [p.interest]).order("step");
+      rows = (data ?? []) as Resource[];
+    }
+    if (rows.length) out.push({ path: p, job, rungs: rows.slice(0, 3), more: rows.slice(3) });
+  }
+  return out;
 }
 
 /** Alumni whose path is close to a pinned one. Often there's none, and then the section stays hidden. */
@@ -127,3 +136,22 @@ export const RESOURCE_LABEL: Record<string, string> = {
   coaching: "Career center",
   club: "Club · beInvolved",
 };
+
+/**
+ * The next career fair and which of the student's steps get them ready for it. Fair steps come from
+ * their wording, the fair prep appointment they came from, or their date (see isFairStep).
+ */
+export async function loadFairPlan(supabase: SupabaseClient, studentId: string, steps: Step[]) {
+  const today = appNow().toISOString().slice(0, 10);
+  const [{ data: events }, { data: prep }] = await Promise.all([
+    supabase.from("resources").select("title, starts_at").eq("type", "event").ilike("title", "%career fair%").gte("starts_at", today).order("starts_at").limit(10),
+    supabase.from("sessions").select("id").eq("student_id", studentId).ilike("session_type", "%fair%"),
+  ]);
+  const fair = nextFair((events ?? []) as Array<{ title: string; starts_at: string | null }>, today);
+  if (!fair || daysUntil(today, fair.date) > 35) return null;
+  const prepIds = new Set((prep ?? []).map((s) => s.id as string));
+  const sem = currentSemester();
+  const inPlay = (s: Step) => s.kind !== "course" && (s.status === "active" || (s.status === "done" && s.completed_at !== null && new Date(s.completed_at) >= sem.start));
+  const ids = new Set(steps.filter((s) => inPlay(s) && isFairStep(s, fair, prepIds)).map((s) => s.id));
+  return { fair, today, days: daysUntil(today, fair.date), ids, total: ids.size, done: steps.filter((s) => ids.has(s.id) && s.status === "done").length };
+}

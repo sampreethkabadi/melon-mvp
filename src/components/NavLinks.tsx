@@ -7,7 +7,7 @@ import type { NavItem } from "@/lib/nav";
 export function NavLinks({ nav }: { nav: NavItem[] }) {
   const path = usePathname();
   const active = [...nav]
-    .filter((n) => !n.soon && (path === n.href || path.startsWith(`${n.href}/`)))
+    .filter((n) => !n.soon && (path === n.href || (path.startsWith(`${n.href}/`) && n.href !== "/student")))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href;
   return (
     <nav aria-label="Main" className="flex flex-wrap gap-4 text-sm font-semibold">

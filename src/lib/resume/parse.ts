@@ -12,13 +12,16 @@ export type ParsedResume = {
   skills: string[];
   interests: string[];
   links: { linkedin?: string; github?: string; portfolio?: string };
+  /** Jobs, research and projects with dates, so the roadmap can place them in the right semester. */
+  experience: Array<{ title: string; org: string | null; start: string | null; end: string | null }>;
 };
 
 const SECTIONS: Record<string, RegExp> = {
   education: /^(education|academic background)\b/i,
   skills: /^(technical\s+)?skills\b|^technologies\b|^tools\b/i,
-  activities: /^(activities|involvement|leadership|campus involvement|extracurriculars?|organizations|clubs)\b/i,
-  other: /^(experience|work experience|professional experience|employment|projects?|research|awards?|honors|certifications?|publications|volunteer\w*|interests|summary|objective|profile|coursework|relevant coursework)\b/i,
+  activities: /^(activities|involvement|campus involvement|extracurriculars?|organizations|clubs)\b/i,
+  experience: /^(experience|work experience|professional experience|employment|projects?|research(?: experience)?|leadership(?: experience)?)$/i,
+  other: /^(awards?|honors|certifications?|publications|volunteer\w*|interests|summary|objective|profile|coursework|relevant coursework)\b/i,
 };
 
 // Keyword clues for each career interest. Word-bounded, so "r" and "ai" need care: see matches().
@@ -44,6 +47,8 @@ export function parseResumeText(raw: string): ParsedResume {
 
   // "Bachelor of Science" with no field after it names the degree, not a major.
   const match = education.match(DEGREE);
+  // "Bachelor of Science in Computer Science Aug 2025 – May 2029": the month isn't part of the major.
+  if (match) match[2] = match[2].replace(/\s+(Spring|Summer|Fall|Winter|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*$/i, "");
   const degree = match && !/^(science|arts|fine arts)$/i.test(match[2]) ? match : null;
   const majors = unique([
     ...listAfter(education, /\b(?:double\s+)?majors?\s*(?:in)?\s*[:\-–]?\s*/i),
@@ -61,11 +66,12 @@ export function parseResumeText(raw: string): ParsedResume {
     skills: findSkills(sections.skills),
     interests: findInterests(text),
     links: findLinks(text),
+    experience: findExperience(sections.experience),
   };
 }
 
 function splitSections(lines: string[]) {
-  const out = { education: [] as string[], skills: [] as string[], activities: [] as string[] };
+  const out = { education: [] as string[], skills: [] as string[], activities: [] as string[], experience: [] as string[] };
   let current: string | null = null;
   for (const line of lines) {
     const heading = line.length <= 40 ? Object.keys(SECTIONS).find((k) => SECTIONS[k].test(line.replace(/[:\s]+$/, ""))) : undefined;
@@ -79,6 +85,52 @@ function splitSections(lines: string[]) {
     if (current && current in out) out[current as keyof typeof out].push(line);
   }
   return out;
+}
+
+const RANGE = new RegExp(
+  `(${TERM.source})\\s*(?:-|–|—|to)\\s*((?:${TERM.source})|present|current|now)`,
+  "i",
+);
+const SINGLE = new RegExp(TERM.source, "i");
+
+/** "Data Analytics Intern  Jun 2025 – Aug 2025" with the employer on the line next to it (or before it). */
+function findExperience(lines: string[]): ParsedResume["experience"] {
+  const out: ParsedResume["experience"] = [];
+  const isBullet = (l: string) => /^[•·▪◦*\-–]/.test(l);
+  const stripPlace = (l: string) =>
+    l.replace(/\s+(?:(?:West|East|North|South|New|San|Los|Fort|Saint|St\.|Salt|Las|Ann)\s)?[A-Z][a-z]+,\s*[A-Z]{2}$/, "").replace(/\s+(remote|online)$/i, "").trim();
+  lines.forEach((line, i) => {
+    if (isBullet(line)) return;
+    const range = line.match(RANGE);
+    const single = range ? null : line.match(SINGLE);
+    const hit = range ?? single;
+    if (!hit || hit.index === undefined) return;
+    let title = line.slice(0, hit.index).replace(/[\s,|–—-]+$/, "").trim();
+    const next = lines[i + 1] && !isBullet(lines[i + 1]) && !SINGLE.test(lines[i + 1]) ? stripPlace(lines[i + 1]) : null;
+    const prev = lines[i - 1] && !isBullet(lines[i - 1]) && !SINGLE.test(lines[i - 1]) ? stripPlace(lines[i - 1]) : null;
+    let org: string | null = next;
+    if (!title) {
+      title = prev ?? "";
+      org = next;
+    } else if (title.includes("|")) {
+      // A project: "Bike-Share Demand Model | Python, scikit-learn"
+      org = null;
+    } else if (title.includes(",") && !next) {
+      // "Data Intern, Acme Corp, June 2026 - August 2026"
+      const [t, ...rest] = title.split(",");
+      title = t.trim();
+      org = rest.join(",").trim() || null;
+    }
+    title = title.split("|")[0].trim();
+    if (!title || title.length > 80) return;
+    const start = range
+      ? formatTerm([range[0], range[2], range[3]] as unknown as RegExpMatchArray)
+      : formatTerm([hit[0], hit[1], hit[2]] as unknown as RegExpMatchArray);
+    const endRaw = range ? range[4] : null;
+    const end = range && range[5] && range[6] ? formatTerm([range[4], range[5], range[6]] as unknown as RegExpMatchArray) : endRaw ? "Present" : start;
+    out.push({ title, org: org && org.length <= 80 ? org : null, start, end });
+  });
+  return out.slice(0, 12);
 }
 
 function findName(lines: string[]): string | null {
@@ -98,7 +150,11 @@ function listAfter(text: string, label: RegExp): string[] {
   for (const line of text.split("\n")) {
     const match = line.match(label);
     if (!match || match.index === undefined) continue;
-    const value = line.slice(match.index + match[0].length).split(/[|;•]|\bminors?\b|\bmajors?\b|\bGPA\b/i)[0];
+    // "Minor in Business Aug 2024 – May 2028": stop at the dates.
+    const value = line
+      .slice(match.index + match[0].length)
+      .replace(new RegExp(`\\s(?:${TERM.source}).*$`, "i"), "")
+      .split(/[|;•]|\bminors?\b|\bmajors?\b|\bGPA\b/i)[0];
     out.push(...value.split(/,|\s+and\s+|\s+&\s+/).map(cleanField).filter(isField));
   }
   return out;
@@ -109,7 +165,10 @@ const isField = (s: string) => s.length >= 2 && s.length <= 60 && /^[A-Z]/.test(
 
 function normalizeDegree(raw: string) {
   const compact = raw.replace(/[.\s]/g, "").toUpperCase();
-  const known: Record<string, string> = { BS: "B.S.", BA: "B.A.", BBA: "BBA", BFA: "B.F.A.", MS: "M.S.", MA: "M.A.", MBA: "MBA", PHD: "Ph.D." };
+  const known: Record<string, string> = {
+    BS: "B.S.", BA: "B.A.", BBA: "BBA", BFA: "B.F.A.", MS: "M.S.", MA: "M.A.", MBA: "MBA", PHD: "Ph.D.",
+    BACHELOROFSCIENCE: "B.S.", BACHELOROFARTS: "B.A.", BACHELOROFFINEARTS: "B.F.A.", MASTEROFSCIENCE: "M.S.", MASTEROFARTS: "M.A.",
+  };
   return known[compact] ?? raw.trim();
 }
 

@@ -268,7 +268,7 @@ export async function resolveFlag(sessionId: string, flagId: string, form: FormD
     user_id: session.student_id,
     type: "flag_resolved",
     title: choice === "keep" ? `${profile.full_name} looked at your flag and kept the highlight` : `${profile.full_name} fixed the highlight you flagged`,
-    link: "/student/sessions",
+    link: "/student/appointments",
   });
   refresh(sessionId);
 }

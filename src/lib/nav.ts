@@ -5,7 +5,7 @@ export const STUDENT_NAV: NavItem[] = [
   { href: "/student", label: "Home" },
   { href: "/student/roadmap", label: "Roadmap" },
   { href: "/student/tasks", label: "Action items" },
-  { href: "/student/sessions", label: "Sessions" },
+  { href: "/student/appointments", label: "Appointments" },
   { href: "/student/rewards", label: "Rewards" },
   { href: "/student/resources", label: "Resources" },
 ];

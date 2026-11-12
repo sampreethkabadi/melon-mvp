@@ -118,3 +118,77 @@ h1, h2, h3 {
   .road-draw { stroke-dasharray: none; }
   .road-spark, .road-trail { display: none; }
 }
+
+/* Everything you can click shows a hand. */
+a[href],
+button:not(:disabled),
+summary,
+select,
+label[for],
+input[type="checkbox"],
+input[type="file"],
+[role="button"] {
+  cursor: pointer;
+}
+
+/* Motion, tuned like Apple's: quick to start, soft to settle. */
+:root {
+  --ease-apple: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.36, 0.64, 1);
+}
+@keyframes melon-panel-in {
+  from { opacity: 0; transform: translateX(40px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melon-road-left {
+  from { opacity: 0.2; transform: translateX(min(22vw, 300px)) scale(1.03); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melon-sheet-up {
+  from { opacity: 0; transform: translateY(48px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melon-fade-up {
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melon-pop {
+  from { opacity: 0; transform: translateY(6px) scale(0.96); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes melon-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--school) 35%, transparent); }
+  70% { box-shadow: 0 0 0 16px color-mix(in srgb, var(--school) 0%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--school) 0%, transparent); }
+}
+.anim-panel-in { animation: melon-panel-in 560ms var(--ease-apple) 140ms both; }
+.anim-road-left { animation: melon-road-left 560ms var(--ease-apple) both; }
+.anim-sheet-up { animation: melon-sheet-up 520ms var(--ease-apple) both; }
+.anim-fade-up { animation: melon-fade-up 420ms var(--ease-apple) both; }
+.anim-pop { animation: melon-pop 220ms var(--ease-apple) both; }
+.anim-pulse { animation: melon-pulse 2.4s ease-out infinite; }
+
+/* Tiles: a tiny lift on hover. Clickable ones lift a little more and gain a soft shadow. */
+.tile-hover {
+  transition: transform 380ms var(--ease-spring), box-shadow 380ms var(--ease-apple);
+}
+.tile-hover:hover { transform: translateY(-2px) scale(1.006); }
+.tile-hover.is-link:hover { transform: translateY(-4px) scale(1.012); box-shadow: 0 18px 40px rgba(20, 33, 27, 0.14); }
+.tile-hover.is-link:active { transform: scale(0.99); transition-duration: 120ms; }
+
+/* On phones the details slide up like a sheet instead of in from the side. */
+@media (max-width: 1023px) {
+  .anim-panel-in { animation-name: melon-sheet-up; }
+  .anim-road-left { animation-name: melon-fade-up; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .anim-panel-in, .anim-road-left, .anim-sheet-up, .anim-fade-up, .anim-pop, .anim-pulse { animation: none; }
+  .tile-hover, .tile-hover:hover, .tile-hover.is-link:hover { transform: none; transition: none; }
+}
+
+/* The undo window on Action items: a thin bar that empties, then the step moves to Done. */
+@keyframes melon-drain {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

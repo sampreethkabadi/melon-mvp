@@ -4,15 +4,16 @@ import { earlierConversation, sampleConversation } from "@/lib/sessions/demo";
 import { sampleForStudent } from "@/lib/sessions/sample-for-student";
 import type { DraftInsight, Segment } from "@/lib/sessions/types";
 import { buildFirstRoadmap } from "@/lib/roadmap/template";
-import { ALUMNI, CLUBS, careerEvents, ladderResources } from "@/lib/catalog";
+import { ALUMNI, CLUBS, careerEvents, jobResources, ladderResources } from "@/lib/catalog";
 import { addDays, appNow, DEMO_TODAY, localDate } from "@/lib/clock";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   SEED_APPOINTMENTS,
-  SEED_COURSES,
   SEED_DONE_ANSWERS,
+  SEED_HISTORY,
   SEED_INTEGRATIONS,
   SEED_MAYA_WINS,
+  SEED_TAYLOR_STORY,
   SEED_REWARDS,
   SEED_SCHOOL,
   SEED_STAFF,
@@ -151,12 +152,24 @@ export async function GET(request: NextRequest) {
   if (apErr) return fail(`appointments: ${apErr.message}`);
   log.push(`${appts.length} appointments on ${today}`);
 
-  // Maya's courses (from "school records")
+  // Past semesters for the road: courses from "school records", and resume history.
+  await db.from("student_courses").delete().in("student_id", studentIds);
+  for (const [email, h] of Object.entries(SEED_HISTORY)) {
+    const id = ids[email];
+    const { error: cErr } = await db
+      .from("student_courses")
+      .insert(h.courses.map(([code, title, term, status]) => ({ school_id: schoolId, student_id: id, code, title, term, status })));
+    if (cErr) return fail(`courses ${email}: ${cErr.message}`);
+    const { data: sp } = await db.from("student_profiles").select("resume_parsed").eq("user_id", id).single();
+    await db
+      .from("student_profiles")
+      .update({ clubs: h.clubs, resume_parsed: { ...((sp?.resume_parsed as object | null) ?? {}), experience: h.experience, clubs: h.clubs } })
+      .eq("user_id", id);
+    if (h.events?.length) {
+      await db.from("activities").insert(h.events.map(([title, occurred_at]) => ({ school_id: schoolId, student_id: id, kind: "event", title, minutes: 120, occurred_at })));
+    }
+  }
   const maya = ids["maya@melon.test"];
-  await db.from("student_courses").delete().eq("student_id", maya);
-  await db.from("student_courses").insert(
-    SEED_COURSES.map(([code, title, term, status]) => ({ school_id: schoolId, student_id: maya, code, title, term, status })),
-  );
 
   // Resource library: a short ladder per path and year, clubs on beInvolved, and career services events.
   await db.from("resources").delete().eq("school_id", schoolId).contains("tags", ["seed"]);
@@ -170,7 +183,7 @@ export async function GET(request: NextRequest) {
     source: "library" as const,
     tags: ["seed", "club"],
   }));
-  const library = [...ladder, ...clubs, ...careerEvents(Number(today.slice(0, 4)))];
+  const library = [...ladder, ...jobResources(), ...clubs, ...careerEvents(Number(today.slice(0, 4)))];
   const { error: resErr } = await db.from("resources").insert(library.map((r) => ({ ...r, school_id: schoolId, is_free: true })));
   if (resErr) return fail(`resources: ${resErr.message}`);
 
@@ -211,6 +224,19 @@ export async function GET(request: NextRequest) {
     .update({ published_at: signedOff, approved_at: signedOff, approved_by: lee, accepted_at: signedOff })
     .eq("student_id", maya);
   if (signErr) return fail(`sign-off: ${signErr.message}`);
+  // Taylor has used Melon since her first semester: nearly every milestone so far, with the action items behind each.
+  const taylor = ids["taylor@melon.test"];
+  const { error: tPubErr } = await db.rpc("_publish_roadmap", { p_student: taylor, p_actor: lee });
+  if (tPubErr) return fail(`publish Taylor: ${tPubErr.message}`);
+  const taylorHistory = await seedTaylorHistory(db, schoolId, taylor, coach, today);
+  if (taylorHistory) return fail(`Taylor's history: ${taylorHistory}`);
+  await db.from("roadmap_changes").update({ seen_at: appNow().toISOString() }).eq("student_id", taylor);
+  const firstDay = `${Number(today.slice(0, 4)) - 2}-09-10T18:00:00Z`;
+  await db
+    .from("roadmaps")
+    .update({ published_at: firstDay, approved_at: firstDay, approved_by: lee, accepted_at: firstDay })
+    .eq("student_id", taylor);
+
   // A session from yesterday still waiting for Lee's approval, so Reviews has something to show.
   const yesterday = new Date(`${addDays(today, -1)}T19:00:00Z`).toISOString();
   const waiting = await seedWaitingSession(db, schoolId, ids["priya@melon.test"], lee, "Course planning", yesterday);
@@ -322,6 +348,78 @@ async function seedWaitingSession(db: ReturnType<typeof createAdminClient>, scho
 }
 
 /** One reviewed session in the past, with its transcript and approved highlights. Returns an error or null. */
+/**
+ * Taylor's road: every guide milestone from freshman fall to now (the Luddy four-year career guide), each with
+ * the action items she finished first. Three past appointments with the coach, and the events she went to.
+ */
+async function seedTaylorHistory(db: ReturnType<typeof createAdminClient>, schoolId: string, student: string, staff: string, today: string) {
+  const year = Number(today.slice(0, 4));
+  const { data: rm } = await db.from("roadmaps").select("id").eq("student_id", student).single();
+  if (!rm) return "no roadmap";
+  const rows = SEED_TAYLOR_STORY.flatMap((m, i) => {
+    const term = `${m.season} ${year + m.yearOffset}`;
+    const done = (day: number) => new Date(Date.UTC(year + m.yearOffset, m.month - 1, day, 17)).toISOString();
+    const base = { school_id: schoolId, roadmap_id: rm.id, student_id: student, term, status: "done", approval: "not_needed" };
+    return [
+      ...m.tasks.map(([kind, title], j) => ({
+        ...base,
+        kind,
+        title,
+        description: null,
+        outcomes: [] as string[],
+        source: "system",
+        sort: 700 + i * 10 + j,
+        completed_at: done((m.day ?? 2) + j * 3),
+      })),
+      { ...base, ...m.milestone, source: "system", sort: 800 + i, completed_at: done(Math.min(28, (m.day ?? 2) + 1 + m.tasks.length * 3)) },
+    ];
+  });
+  const { error } = await db.from("roadmap_items").insert(rows);
+  if (error) return error.message;
+
+  // This semester: she already registered for the fair.
+  await db
+    .from("roadmap_items")
+    .update({ status: "done", completed_at: new Date(`${addDays(today, -2)}T20:00:00Z`).toISOString() })
+    .eq("student_id", student)
+    .eq("title", "Register for the Career Fair in Handshake");
+
+  for (const [type, when] of [
+    ["Resume, cover letter or portfolio review", `${year - 2}-10-08T18:00:00Z`],
+    ["Career exploration", `${year - 1}-10-14T18:00:00Z`],
+    ["Mock technical interview", `${year}-03-10T18:00:00Z`],
+  ] as const) {
+    const sample = sampleConversation(await sampleForStudent(student, type));
+    const err = await seedPastSession(db, schoolId, student, staff, type, when, {
+      segments: sample.segments,
+      insights: sample.insights.filter((i) => i.kind === "summary" || i.kind === "advice"),
+    });
+    if (err) return err;
+  }
+
+  const ev = (kind: string, title: string, minutes: number, occurred_at: string) => ({
+    school_id: schoolId,
+    student_id: student,
+    kind,
+    title,
+    minutes,
+    occurred_at,
+  });
+  const { error: actErr } = await db
+    .from("activities")
+    .insert([
+      ev("workshop", "Resume workshop", 60, `${year - 2}-10-01T22:00:00Z`),
+      ev("event", "Spring career fair", 120, `${year - 1}-02-26T17:00:00Z`),
+      ev("event", "Fall career fair", 120, `${year - 1}-09-18T17:00:00Z`),
+      ev("event", "Hackathon with the Computer Science Club", 600, `${year - 1}-11-08T15:00:00Z`),
+      ev("workshop", "Elevator pitch workshop", 60, `${year}-02-12T22:00:00Z`),
+      ev("event", "Computer Science Club speaker night", 90, `${addDays(today, -6)}T23:00:00Z`),
+      ev("workshop", "Resume workshop", 60, `${addDays(today, -12)}T22:00:00Z`),
+    ]);
+  await db.from("notifications").update({ read_at: appNow().toISOString() }).eq("user_id", student);
+  return actErr?.message ?? null;
+}
+
 async function seedPastSession(
   db: ReturnType<typeof createAdminClient>,
   schoolId: string,
