@@ -2,7 +2,7 @@
 
 Career roadmaps that remember every advising session. This is the proof of concept for the InnoQuest demo. **It uses mock students and invented data only: don't enter real student information or real resumes.**
 
-**Stack:** Next.js 15 (App Router, TypeScript, Tailwind 4) · Supabase (login, Postgres with row-level security, file storage) · Vercel (hosting).
+**Stack:** Next.js 15 (App Router, TypeScript, Tailwind 4) · Supabase (login, Postgres with row-level security, file storage) · Vercel (hosting) · Daily (video) · Deepgram (speech to text) · Ollama (local open-source summaries). Why each one, the architecture, running costs and the roadmap past the MVP: [docs/TECHNICAL_BRIEF.md](docs/TECHNICAL_BRIEF.md).
 
 ## Build steps
 
