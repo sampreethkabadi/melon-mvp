@@ -18,6 +18,9 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | 4b | Advisor view: suggestions on accepted roadmaps, approval queue, student overview, meeting prep | ✅ |
 | 3d | Candy road: semesters as buttons, flags for what you did, a hover summary, the path fork in junior fall, adding your own wins | ✅ |
 | 3e | Design review: Sessions renamed Appointments, Home as one clickable dashboard, Action items with a Career Fair plan and undo, team avatars, a Profile page, per-job lists, Jake's-style sample resumes | ✅ |
+| 3f | Polish: switching paths animates on the road, and every button, link and expandable row reacts the same way to the cursor | ✅ |
+| 4c | Summaries by a local open-source model (Ollama), and the advisor decides where each action item goes: action item, milestone, or under a goal | ✅ |
+| 4d | Melon video calls (Daily): consent from both people inside the call, each person's own microphone recorded, and a transcript both can fix before the summary | ✅ |
 | 3 (later) | Student settings | |
 | 5 | Test prep: test script, feedback capture, fixes | |
 
@@ -26,7 +29,7 @@ Career roadmaps that remember every advising session. This is the proof of conce
 ### 1. Supabase: create the database
 
 1. In your Supabase project, open **SQL Editor > New query**.
-2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql), [`0009_candy_road.sql`](supabase/migrations/0009_candy_road.sql). Skip any you've already run.
+2. Paste all of [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql) and click **Run**. You should see "Success. No rows returned". Then do the same, one new query each, with [`0002_roadmap_drafts.sql`](supabase/migrations/0002_roadmap_drafts.sql), [`0003_sessions_and_assignment.sql`](supabase/migrations/0003_sessions_and_assignment.sql), [`0004_branch_tree.sql`](supabase/migrations/0004_branch_tree.sql), [`0005_student_tabs.sql`](supabase/migrations/0005_student_tabs.sql) and [`0006_focus_and_pins.sql`](supabase/migrations/0006_focus_and_pins.sql), [`0007_accept_and_privacy.sql`](supabase/migrations/0007_accept_and_privacy.sql), [`0008_advisor_suggestions.sql`](supabase/migrations/0008_advisor_suggestions.sql), [`0009_candy_road.sql`](supabase/migrations/0009_candy_road.sql), [`0010_action_item_placement.sql`](supabase/migrations/0010_action_item_placement.sql), [`0011_video_calls.sql`](supabase/migrations/0011_video_calls.sql). Skip any you've already run.
 3. Open **Authentication > URL Configuration**:
    - **Site URL:** your Vercel link (for example `https://melon-mvp.vercel.app`). Fill this in after step 2 below.
    - **Redirect URLs:** add `https://YOUR-VERCEL-LINK/auth/callback` and `http://localhost:3000/auth/callback`.
@@ -47,6 +50,8 @@ Career roadmaps that remember every advising session. This is the proof of conce
 | `SEED_PASSWORD` | a password for the test accounts, 10+ characters |
 | `ANTHROPIC_API_KEY` | optional: Claude drafts session suggestions |
 | `DEEPGRAM_API_KEY` | optional: turns recordings into transcripts, and turns on the record button |
+| `DAILY_API_KEY` | optional: turns on Melon video calls (daily.co > Developers) |
+| `OLLAMA_URL`, `OLLAMA_MODEL` | optional, only where Ollama runs (see "Summaries on your own computer"): for example `http://localhost:11434` and `qwen3:8b` |
 | `NEXT_PUBLIC_DEMO_TODAY` | optional: the date the app pretends is today. Defaults to `2026-09-03`, two weeks before the Fall Career Fair. Set `off` for the real date, then re-open the test data link |
 
 3. Click **Deploy**. If you add or change a variable later, redeploy (Deployments > ⋯ > Redeploy).
@@ -82,22 +87,43 @@ A roadmap is final only when both sides agree. The advisor or coach clicks **App
 
 Use two browser windows, or one normal and one private: Rivera in one, Maya in the other. Reset first by opening the test data link.
 
-1. **Maya, Home:** one dashboard. Every card opens what it's about and ends with the next thing to do: the Career Fair countdown and her fair steps, her next appointment, skills, career vibe, streak and swag. **Action items:** her fair steps as one numbered plan, then Upcoming and Done this semester. Tick a step: Undo stays for 4 seconds, then it moves to Done. Her avatar (top right) opens **Profile** with her team. **Roadmap:** her candy road. Flags are milestones only (things she'd put on a resume), worded as wins. Semesters 1 to 4 are done; tap one to plant its green flags and hover one for a short summary. This semester's milestones are faded crimson flags: hover the Fall Career Fair to see its 4 action items, or mark "Take a leadership role" done with **I did this** and watch it turn green. **See details** on any flag lists the action items behind it. Later semesters show faded milestones from the Luddy four-year guide. To show **Did you go?** on the fair flag, set `NEXT_PUBLIC_DEMO_TODAY=2026-09-18` and open the seed link again.
+1. **Maya, Home:** one dashboard. Every card opens what it's about and ends with the next thing to do: the Career Fair countdown and her fair steps, her next appointment, skills, career vibe, streak and swag. **Action items:** her fair steps as one numbered plan, then Upcoming and Done this semester. Tick a step: Undo stays for 4 seconds, then it moves to Done. Her avatar (top right) opens **Profile** with her team. **Roadmap:** her candy road. Flags are milestones only (things she'd put on a resume), worded as wins. Semesters 1 to 4 are done; tap one to plant its green flags and hover one for a short summary. This semester's milestones are faded crimson flags: hover the Fall Career Fair to see its 4 action items, or mark "Take a leadership role" done with **I did this** and watch it turn green. **See action items** on any flag opens Action items on that milestone. Later semesters show faded milestones from the Luddy four-year guide. To show **Did you go?** on the fair flag, set `NEXT_PUBLIC_DEMO_TODAY=2026-09-18` and open the seed link again.
 2. **Rivera, Today:** open Maya's briefing (Career fair preparation), then **Start session** and **I agree to record**. **Maya, Home:** **I agree**.
-3. **Rivera:** **Use the sample conversation**. Check the highlights, remove or edit anything wrong, then **Looks good · send to Maya**. One click; nothing else to approve.
-4. **Maya, Roadmap:** a new **Cybersecurity** branch, "What changed", and the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 appointments). **Claim it** gives a pickup code.
-5. **Maya, Roadmap:** **Switch my pin to this path**. Juniors and up pin one path, so Data analyst pauses its steps, and "Building your path" and **Resources** switch to cybersecurity. Pin Data analyst again and its steps come back.
-6. **Maya, Appointments:** colored highlights, with **Expand the full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
+3. **Rivera:** **Use the sample conversation**. Check the action items and key points, remove or edit anything wrong, then **Approve the rest · send to Maya**. One click; nothing else to approve.
+4. **Maya, Roadmap:** "What changed" above the road, and a new **Cybersecurity** road at the junior-fall fork, tagged "New · from your last appointment". **Action items:** the 2 new steps (never more than 2 from one session, and never more than 5 open). **Rewards:** the sticker pack unlocks (3 appointments). **Claim it** gives a pickup code.
+5. **Maya, Roadmap:** **Switch my pin to this path** (or **Switch to this path →** at the fork). The page scrolls to the fork, the new path's color sweeps down the road to the goal, the path label and goal flag pop, and a note says which path paused. Juniors and up pin one path, so Data analyst pauses its steps, and **Resources** switches to cybersecurity. Switch back and its steps return.
+6. **Maya, Appointments:** colored highlights, with **Full transcript** if she wants it. **Flag a mistake** on a highlight. **Rivera** gets a notification and fixes, removes or keeps it from the session page.
 7. **Lee, Today:** Maya's **Course planning** session. Advisor samples stay on courses and policy, and their steps are course steps.
 8. **Admin, Advisors:** move Maya to Dr. Malik. **Malik, Students, Maya:** the briefing carries over the history, and the roadmap shows as a short card with the full version one click away.
 
 Freshmen and sophomores can pin 2 paths and get gentler lists; juniors and up pin 1. With no API keys, all of this still works: the screens say when a conversation is a sample and when suggestions were saved in advance.
 
+## Summaries on your own computer (local open-source model)
+
+Session summaries can come from an open-source model running on your laptop with [Ollama](https://ollama.com), so a transcript never goes to a cloud AI. Vercel can't reach your laptop, so for this you run the app on the laptop, connected to the same Supabase project as the live site. Both show the same data.
+
+1. Install Ollama, then run `ollama pull qwen3:8b` (about 5 GB; 16 GB of memory is enough).
+2. In the project folder, create `.env.production.local` with the same values as Vercel (Supabase URL, `anon` key, `service_role` key, `SEED_SECRET`, `SEED_PASSWORD`, and `DAILY_API_KEY` / `DEEPGRAM_API_KEY` if you use them), plus `OLLAMA_URL=http://localhost:11434` and `OLLAMA_MODEL=qwen3:8b`. Git ignores this file. Don't commit or share it.
+3. Run `npm run build && npm start`, and present from `http://localhost:3000`.
+
+The first summary after starting takes about a minute while the model loads, then about 20 seconds. If Ollama isn't running, Claude is used when its key is set, otherwise the saved suggestions or simple rules, so the demo never stops. The session page says which one drafted the notes.
+
+## Melon video calls
+
+With `DAILY_API_KEY` set, an advisor or coach can click **Start a video call** on a session page. The student gets a notification and a **Join the video call** card on Home. Inside the call:
+
+- Each person agrees to recording (or not) next to the video. Nothing is recorded until both say yes, and either can stop it any time, which keeps nothing.
+- The advisor or coach starts the recording. Each browser records only its own microphone, so the transcript knows who said what.
+- **End recording · show transcript** turns both recordings into one transcript (needs `DEEPGRAM_API_KEY`), or use **Use the sample conversation instead**.
+- Both people then see the transcript and can fix, add or delete lines. Every change is logged with who made it and what it said before. **Looks right · draft the summary** locks it and drafts the key points and action items for review.
+
+For a demo, use two devices with headphones, or two rooms: two microphones in one room both hear both people.
+
 ## What advisors and coaches get
 
 - **Today:** a card for each meeting with what it's probably about, the student's progress, their background and what's still open. The next meeting opens on its own. It's built from their record, so it needs no AI key.
 - **Students:** everyone at a glance, with progress and what needs a look. Filter, search or sort, and open a row for details.
-- **Reviews:** action items and key points from each session, next to the transcript lines behind them. Approve, edit or remove them one by one, or approve the rest in one click.
+- **Reviews:** action items and key points from each session, next to the transcript lines behind them. Approve, edit or remove them one by one, or approve the rest in one click. For each action item, choose where it goes: an **Action item** (the default), a **Milestone** on the student's road in a semester you pick, or **Under a goal** (one already on their roadmap, or a new one you name). Goals show on the road as flags and on Action items as groups with their steps.
 - **Roadmaps:** drafts are edited directly. Once both sides have accepted a roadmap, staff can only suggest adding, changing or removing a step, and the student decides. The database enforces this. Steps approved from a session still go straight on, because they were agreed in the meeting.
 
 ## How new sign-ups get an advisor
@@ -133,9 +159,9 @@ npm run dev                  # http://localhost:3000
 
 ## Resumes, roadmaps and AI
 
-Resume text is read with plain rules on our own server, and email and phone aren't kept. Dated jobs, research and projects are kept so the road can place them in the right semester. Testers upload the invented sample resumes in `public/samples/` (sources in `docs/sample-resumes/`), never a real one. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use Claude when `ANTHROPIC_API_KEY` is set and the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
+Resume text is read with plain rules on our own server, and email and phone aren't kept. Dated jobs, research and projects are kept so the road can place them in the right semester. Testers upload the invented sample resumes in `public/samples/` (sources in `docs/sample-resumes/`), never a real one. The first roadmap comes from year-by-year templates plus the student's answers (3 steps to start, timed around the Fall Career Fair), then waits for advisor approval. Session suggestions use the local model when `OLLAMA_URL` is set, otherwise Claude when `ANTHROPIC_API_KEY` is set, and only when the student agreed to AI. Notes from a session the student declined to record never go to an outside service.
 
-**Known gap:** audio isn't deleted automatically yet. `recordings.delete_after` is set to 30 days, but nothing acts on it. Add a scheduled job before using anything other than mock data.
+**Known gaps:** **Add to calendar** opens a filled-in Google Calendar event without syncing anything, and appointments come from test data (there's no booking screen yet). The recording on the session page (for in-person meetings) uses one microphone, the staff member's. Audio isn't deleted automatically yet. `recordings.delete_after` is set to 30 days, but nothing acts on it. Add a scheduled job before using anything other than mock data.
 
 ## Tests
 
@@ -158,6 +184,8 @@ psql -f supabase/migrations/0006_focus_and_pins.sql
 psql -f supabase/migrations/0007_accept_and_privacy.sql
 psql -f supabase/migrations/0008_advisor_suggestions.sql
 psql -f supabase/migrations/0009_candy_road.sql
+psql -f supabase/migrations/0010_action_item_placement.sql
+psql -f supabase/migrations/0011_video_calls.sql
 psql -f supabase/tests/10_access_rules.sql   # each check prints what to expect
 psql -f supabase/tests/20_roadmap_drafts.sql
 psql -f supabase/tests/30_sessions.sql

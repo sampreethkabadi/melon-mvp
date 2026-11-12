@@ -17,7 +17,7 @@ export function TopBar({ profile, nav, bell, profileHref }: { profile: Profile; 
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-white/85 backdrop-blur">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-3 px-4 py-3 sm:px-6">
-        <Link href="/" className="flex items-center gap-3">
+        <Link href="/" className="flex items-center gap-3 hover:opacity-70">
           <Logo size={30} />
           {school && (
             <span className="hidden items-center gap-2 border-l border-line pl-3 text-sm font-semibold text-muted sm:inline-flex">

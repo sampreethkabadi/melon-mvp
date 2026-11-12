@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/student", "/staff", "/admin"];
+const PROTECTED = ["/student", "/staff", "/admin", "/call"];
 
 // Keeps the login session fresh on every request and sends signed-out visitors to /login.
 export async function middleware(request: NextRequest) {

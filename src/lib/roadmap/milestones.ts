@@ -2,13 +2,15 @@
 // friend about. Tasks (registering, prep, practice, chores, applying) stay on Action items.
 // The planned milestones per semester come from the Luddy Four-Year Career Guide (Explore, Evolve, Engage, Execute).
 
-type StepLike = { kind: string; title: string; source: string; status: string };
+type StepLike = { kind: string; title: string; source: string; status: string; milestone?: boolean | null };
 
 const NOT_A_MILESTONE =
   /\b(mock|practice|register|rsvp|book|sign up|set up|update your|headline|profile|try the|lessons?|tutorial|info session|coffee|1:1 call|apply to|applied to|review)\b/i;
 
 /** Whether a finished step earns a flag. Anything the student added themselves always does. */
 export function isMilestone(s: StepLike) {
+  // The advisor's call, when they made one, beats the rules below.
+  if (s.milestone === true || s.milestone === false) return s.milestone;
   if (s.source === "student") return true;
   if (s.kind === "course" || s.kind === "skill" || s.kind === "application" || s.kind === "coaching") return false;
   if (NOT_A_MILESTONE.test(s.title)) return false;
@@ -146,7 +148,7 @@ export function milestoneKey(item: { title: string; kind: string }, pathName?: s
 }
 
 /** The action items that led to a milestone: tasks from the same semester that match it (never other milestones). */
-export function tasksFor<T extends { title: string; kind: string; source: string; status: string; term: string | null; sort: number }>(
+export function tasksFor<T extends { title: string; kind: string; source: string; status: string; term: string | null; sort: number; parent_id?: string | null }>(
   key: string | null,
   steps: T[],
   term: string,
@@ -157,6 +159,7 @@ export function tasksFor<T extends { title: string; kind: string; source: string
       s.term === term &&
       s.kind !== "course" &&
       s.sort !== 950 &&
+      !s.parent_id &&
       !isMilestone(s) &&
       TASK_MATCH[key].test(s.title) &&
       (s.status === "done" || s.status === "active"),

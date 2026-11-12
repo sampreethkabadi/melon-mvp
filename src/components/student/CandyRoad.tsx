@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type CSSProperties } from "react";
-import { logWin, setPin } from "@/app/student/actions";
+import { logWin, setItemDone, setPin } from "@/app/student/actions";
 import { buildRoad, ICONS, placeLabels, ROAD_W, ROAD_X, type Box, type Road } from "@/lib/roadmap/road";
 
 // The Roadmap page's candy road. Every semester is a numbered button; opening one plants its flags on the
@@ -22,7 +22,7 @@ export type RoadItem = {
   wins: string[];
   /** A milestone for this semester that the student can mark done from the road. `ask` milestones have a date
    * ("Did you go?") and are `ready` once it has passed. */
-  claim?: { title: string; kind: string; ask: boolean; ready: boolean };
+  claim?: { title: string; kind: string; ask: boolean; ready: boolean; itemId?: string };
   /** The action items behind this milestone: what the student did (done) or still has to do. */
   tasks?: Array<{ title: string; done: boolean }>;
   /** Where "See action items" goes: the Action items tab, focused on this milestone. */
@@ -34,6 +34,8 @@ export type RoadPath = {
   name: string;
   goal: string;
   color: string;
+  /** The path's own color. The pinned road is drawn in ink, so this is what flashes when you switch to it. */
+  accent?: string;
   ink: string;
   tag: string;
   tagBg: string;
@@ -256,6 +258,29 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
     stopRef.current = s;
   };
 
+  // ---- switching paths
+  // When the pinned path changes (from the fork here or "Switch my pin" above the road), make the swap
+  // obvious: bring the fork into view, repaint the road from the fork to the goal in the new color, pop the
+  // path label and goal flag, and say what happened in words.
+  const [swap, setSwap] = useState<{ key: number; to: string; from: string | null } | null>(null);
+  const [switching, setSwitching] = useState<string | null>(null);
+  const prevMain = useRef<{ id: string; name: string } | null>(main ? { id: main.id, name: main.name } : null);
+  const forkRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const before = prevMain.current;
+    prevMain.current = main ? { id: main.id, name: main.name } : null;
+    if (!main || before?.id === main.id) return;
+    setSwap((s) => ({ key: (s?.key ?? 0) + 1, to: main.name, from: before?.name ?? null }));
+    setBurst((b) => b + 1);
+    walk({ type: "fork" });
+    const calm = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    forkRef.current?.scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "center" });
+    const t = setTimeout(() => setSwap(null), 5200);
+    return () => clearTimeout(t);
+    // Only a change of pinned path should trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [main?.id]);
+
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (tip || adding >= 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
@@ -340,6 +365,18 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
     if (!it.claim) return;
     setClaimError(null);
     start(async () => {
+      // A milestone already on the roadmap (an advisor set it) is just marked done.
+      if (it.claim!.itemId) {
+        try {
+          await setItemDone(it.claim!.itemId, true);
+          setTip(null);
+          setHl(it.id);
+          setTimeout(() => setHl(null), 3400);
+        } catch (e) {
+          setClaimError(e instanceof Error ? e.message : "Couldn't save that. Try again.");
+        }
+        return;
+      }
       const res = await logWin({
         term: semesters[tip?.k ?? current].term,
         title: it.claim!.title,
@@ -378,13 +415,19 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
 
   const choosePath = (p: RoadPath) => {
     setPinError(null);
+    setSwitching(p.id);
     start(async () => {
       try {
         await setPin(p.id, true);
-        setBurst((b) => b + 1);
-        walk({ type: "fork" });
+        // A second pin (freshmen and sophomores) doesn't change the main road, so celebrate it here.
+        if (main && p.action === "pin") {
+          setBurst((b) => b + 1);
+          walk({ type: "fork" });
+        }
       } catch (e) {
         setPinError(e instanceof Error ? e.message : "Couldn't change that pin. Try again.");
+      } finally {
+        setSwitching(null);
       }
     });
   };
@@ -482,8 +525,31 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                 {road.paths.future && (
                   <path d={road.paths.future} fill="none" stroke="#b9c1bc" strokeWidth={5} strokeDasharray="3 13" strokeLinecap="round" />
                 )}
-                <path d={road.paths.chosen} fill="none" stroke={pathCol} strokeWidth={5} strokeDasharray="3 13" strokeLinecap="round" />
+                <path
+                  key={main?.id ?? "none"}
+                  className={swap ? "road-fade" : undefined}
+                  d={road.paths.chosen}
+                  fill="none"
+                  stroke={pathCol}
+                  strokeWidth={5}
+                  strokeDasharray="3 13"
+                  strokeLinecap="round"
+                />
               </g>
+              {swap && (
+                // The new path's color sweeps down the road from the fork to the goal, then settles.
+                <path
+                  key={swap.key}
+                  className="road-swap"
+                  pathLength={1}
+                  d={road.paths.chosen}
+                  fill="none"
+                  stroke={main?.accent ?? pathCol}
+                  strokeWidth={20}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
             </svg>
 
             {tops.map((t, z) => (
@@ -672,6 +738,7 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
 
             {/* The fork in junior fall */}
             <div
+              ref={forkRef}
               className="road-float absolute"
               style={{ left: road.fork.x - 30, top: road.fork.y - 34, width: 60, height: 68, animationDelay: "900ms" }}
             >
@@ -724,7 +791,7 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
               if (!e) return null;
               const right = e.x > road.fork.x;
               return (
-                <div key={p.id}>
+                <div key={p.id} className={swap?.from === p.name ? "road-swapin" : undefined}>
                   <div className="absolute" style={{ left: e.x - 10, top: e.y - 50, width: 48, height: 56 }}>
                     <svg width={48} height={56} viewBox="0 0 48 56" aria-hidden="true">
                       <ellipse cx={10} cy={51} rx={8} ry={3} fill="rgba(20,33,27,.18)" />
@@ -762,9 +829,9 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                         type="button"
                         disabled={pending}
                         onClick={() => choosePath(p)}
-                        className="text-[12.5px] font-bold text-link hover:underline disabled:opacity-50"
+                        className="text-[12.5px] font-bold text-link disabled:opacity-50"
                       >
-                        {p.action === "switch" ? "Switch to this path →" : "Pin this path →"}
+                        {switching === p.id ? "Switching…" : p.action === "switch" ? "Switch to this path →" : "Pin this path →"}
                       </button>
                     )}
                   </div>
@@ -773,7 +840,8 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
             })}
 
             <div
-              className="pointer-events-none absolute flex h-[30px] items-center whitespace-nowrap rounded-full border-2 border-ink px-3.5 text-[12.5px] font-bold"
+              key={`pill-${main?.id ?? "none"}`}
+              className={`pointer-events-none absolute flex h-[30px] items-center whitespace-nowrap rounded-full border-2 border-ink px-3.5 text-[12.5px] font-bold ${swap ? "road-swappop" : ""}`}
               style={{ left: layout.pill.x, top: layout.pill.y, background: main?.color ?? "#fff", color: main?.ink ?? "var(--color-ink)" }}
             >
               {main ? `Your path: ${main.name}` : "Pick a path"}
@@ -781,8 +849,9 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
 
             {/* The first-job goal */}
             <div
-              className="absolute flex w-[220px] flex-col items-center gap-1.5 text-center"
-              style={{ left: road.goal.x - 110, top: road.goal.y - 50 }}
+              key={`goal-${main?.id ?? "none"}`}
+              className={`absolute flex w-[220px] flex-col items-center gap-1.5 text-center ${swap ? "road-swappop" : ""}`}
+              style={{ left: road.goal.x - 110, top: road.goal.y - 50, animationDelay: swap ? "1.1s" : undefined }}
             >
               <svg width={44} height={54} viewBox="0 0 44 54" aria-hidden="true">
                 <path d="M14 4 L14 50" stroke="var(--color-ink)" strokeWidth={3} strokeLinecap="round" />
@@ -999,6 +1068,18 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
             )}
           </div>
         </div>
+      </div>
+      {/* Says in words what the road just showed. Outside the scaled road, so it stays put on screen. */}
+      <div role="status" aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-4">
+        {swap && (
+          <p
+            key={swap.key}
+            className="road-swappop max-w-md rounded-2xl border-2 border-ink px-4 py-3 text-sm font-bold shadow-[0_12px_30px_-10px_rgba(20,33,27,.5)]"
+            style={{ background: main?.color ?? "#fff", color: main?.ink ?? "var(--color-ink)" }}
+          >
+            Switched to {swap.to}.{swap.from ? ` ${swap.from} is paused, and its steps come back if you switch again.` : ""}
+          </p>
+        )}
       </div>
     </section>
   );

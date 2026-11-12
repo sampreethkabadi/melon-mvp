@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { analyzeWithClaude, CLAUDE_MODEL, isClaudeConfigured, PROMPT_VERSION } from "./claude";
+import { analyzeWithOllama, isOllamaConfigured, ollamaModel } from "./ollama";
 import { sampleConversation, type SampleContext } from "./demo";
 import { analyzeByRules } from "./rules";
 import { keepSupported, type DraftInsight, type Segment } from "./types";
@@ -21,8 +22,8 @@ export async function saveSegments(session: SessionRow, segments: Segment[], sou
 }
 
 /**
- * Drafts suggestions for the advisor. Claude runs only when it's set up and the student agreed to AI
- * analysis. Otherwise, or if Claude fails, samples use their saved suggestions and everything else uses rules.
+ * Drafts suggestions for the advisor. The local model (or Claude) runs only when it's set up and the student
+ * agreed to AI analysis. Otherwise, or if the model fails, samples use their saved suggestions and everything else uses rules.
  */
 export async function draftInsights(session: SessionRow, sampleFor?: SampleContext) {
   const db = createAdminClient();
@@ -47,7 +48,17 @@ export async function draftInsights(session: SessionRow, sampleFor?: SampleConte
 
   let drafted: DraftInsight[] | null = null;
   let modelRef = "rules-v1";
-  if (isClaudeConfigured() && (count ?? 0) > 0) {
+  const agreed = (count ?? 0) > 0;
+  // The local model comes first: the transcript stays on this machine. Claude is next if it's set up.
+  if (agreed && isOllamaConfigured()) {
+    try {
+      drafted = await analyzeWithOllama(segments, { role, type: session.session_type });
+      modelRef = `ollama:${ollamaModel()}`;
+    } catch (err) {
+      console.error("Local model analysis failed, using the fallback:", err instanceof Error ? err.message : "unknown");
+    }
+  }
+  if (!drafted && agreed && isClaudeConfigured()) {
     try {
       drafted = await analyzeWithClaude(segments, { role, type: session.session_type });
       modelRef = CLAUDE_MODEL;

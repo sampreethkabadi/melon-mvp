@@ -9,7 +9,7 @@ export const PROMPT_VERSION = "session-insights-v2";
 
 export const isClaudeConfigured = () => Boolean(process.env.ANTHROPIC_API_KEY);
 
-const Output = z.object({
+export const Output = z.object({
   insights: z.array(
     z.object({
       kind: z.enum(INSIGHT_KINDS),
@@ -20,7 +20,7 @@ const Output = z.object({
   ),
 });
 
-const SYSTEM = `You help university academic advisors and career coaches by drafting notes from a session. The advisor or coach approves the notes with one click, and the student sees them as a few highlights, so a short accurate list is worth more than a long one. Students are busy with coursework: never suggest more than 2 actions.
+export const SYSTEM = `You help university academic advisors and career coaches by drafting notes from a session. The advisor or coach approves the notes with one click, and the student sees them as a few highlights, so a short accurate list is worth more than a long one. Students are busy with coursework: never suggest more than 2 actions.
 
 Career coaches cover careers: interviews, resumes, LinkedIn, career fairs, internships, offers and events (on campus or off). Academic advisors cover courses, degree requirements and university policy only; for an advisor session, actions must be course or policy steps with roadmap_kind "course", and leave out career advice.
 

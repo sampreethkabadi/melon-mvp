@@ -57,11 +57,32 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
     .map((m) => ({ ...m, title: m.path && main ? m.title.replace("your path", main.name) : m.title }))
     .filter((m) => !claimed.has(pastTense(m.title).toLowerCase()) && !claimedKeys.has(m.key));
   if (plan && !planned.some((m) => m.key === "fair")) planned.unshift({ key: "fair", title: "Go to the Career Fair", dated: true, tasks: [] });
-  const active = [...f.now, ...f.unlocks];
+  // Milestones themselves live on the road; their action items are listed here.
+  const active = [...f.now, ...f.unlocks].filter((s) => s.milestone !== true);
   const taken = new Set<string>();
   const matches = (key: string, s: Step) => (key === "fair" ? Boolean(plan?.ids.has(s.id)) : Boolean(TASK_MATCH[key]?.test(s.title)));
   const byDate = (a: Step, b: Step) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
-  const groups: MilestoneGroup[] = planned
+  // Goals an advisor or coach set with the student come first, with the action items they put under them.
+  const goalGroups: MilestoneGroup[] = steps
+    .filter((g) => g.milestone === true && g.status !== "done" && g.status !== "skipped")
+    .map((g) => {
+      const mine = active.filter((s) => s.parent_id === g.id).sort(byDate);
+      mine.forEach((s) => taken.add(s.id));
+      const finished = doneSteps.filter((s) => s.parent_id === g.id).length;
+      return {
+        key: `goal-${g.id}`,
+        title: g.title,
+        when: g.term === sem.term ? "This semester" : `By ${shortTerm(g.term)}`,
+        dated: false,
+        days: null,
+        note: "You set this goal with your advisor or coach. Tick these off, then mark the goal done on your road.",
+        total: mine.length + finished,
+        done: finished,
+        items: mine.map(toItem),
+      };
+    })
+    .filter((g) => g.items.length > 0);
+  const plannedGroups: MilestoneGroup[] = planned
     .map((m) => {
       const mine = active.filter((s) => !taken.has(s.id) && matches(m.key, s)).sort(byDate);
       mine.forEach((s) => taken.add(s.id));
@@ -80,8 +101,9 @@ export default async function TasksPage({ searchParams }: { searchParams: Promis
       };
     })
     .filter((g) => g.items.length > 0);
+  const groups = [...goalGroups, ...plannedGroups];
   const others = active.filter((s) => !taken.has(s.id)).map(toItem);
-  const goalOf = (s: Step) => planned.find((m) => matches(m.key, s))?.title;
+  const goalOf = (s: Step) => (s.parent_id ? steps.find((g) => g.id === s.parent_id)?.title : undefined) ?? planned.find((m) => matches(m.key, s))?.title;
   const done = doneSteps.map((s) => ({ id: s.id, title: s.title, when: shortDate(s.completed_at!.slice(0, 10)), goal: goalOf(s) ? `For: ${goalOf(s)}` : undefined }));
 
   // Upcoming, in brief: what opens next, what you queued, career center dates, and later semesters.
