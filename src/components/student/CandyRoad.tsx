@@ -23,6 +23,10 @@ export type RoadItem = {
   /** A milestone for this semester that the student can mark done from the road. `ask` milestones have a date
    * ("Did you go?") and are `ready` once it has passed. */
   claim?: { title: string; kind: string; ask: boolean; ready: boolean };
+  /** The action items behind this milestone: what the student did (done) or still has to do. */
+  tasks?: Array<{ title: string; done: boolean }>;
+  /** The milestone's page, which lists those action items. */
+  href: string;
 };
 export type RoadSemester = { term: string; short: string; year: string; status: "done" | "now" | "next"; items: RoadItem[]; canAdd: boolean };
 export type RoadPath = {
@@ -559,8 +563,8 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                         {...common}
                         id={`road-flag-${item.id}`}
                         prefetch={false}
-                        href={`/student/tasks/${item.id}?from=road&open=${encodeURIComponent(semesters[k].term)}`}
-                        aria-label={`${item.title}, ${item.sub}. Opens the action item.`}
+                        href={item.href}
+                        aria-label={`${item.title}, ${item.sub}. Opens its details.`}
                         onMouseEnter={() => showTip(k, j)}
                         onMouseLeave={hideTip}
                         onFocus={() => showTip(k, j)}
@@ -842,41 +846,29 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                     {tipView.it.mine ? " · added by you" : ""}
                   </span>
                   <span className="font-brand text-lg font-bold leading-snug">{tipView.it.title}</span>
-                  <span className="mt-1 text-[11px] font-bold uppercase tracking-[.1em] text-muted">
-                    {tipView.it.state === "done" ? "What it was about" : "What it's about"}
-                  </span>
-                  <p className="text-[13.5px] leading-normal">{tipView.it.about}</p>
-                  {tipView.it.wins.length > 0 && (
+                  {tipView.it.about && <p className="text-[13.5px] leading-normal text-ink-2">{tipView.it.about}</p>}
+                  {(tipView.it.tasks ?? []).length > 0 && (
                     <>
                       <span className="mt-1 text-[11px] font-bold uppercase tracking-[.1em] text-muted">
-                        {tipView.it.state === "done"
-                          ? "What you got out of it"
-                          : tipView.it.id.startsWith("planned-")
-                            ? "Tasks for it"
-                            : "What you'll get out of it"}
+                        {tipView.it.state === "done" ? "What you did to get here" : "Action items"}
                       </span>
                       <ul className="flex flex-col gap-1.5">
-                        {tipView.it.wins.map((w) => (
+                        {(tipView.it.tasks ?? []).slice(0, 4).map((t) => (
+                          <li key={t.title} className="flex items-start gap-2 text-[13.5px] leading-snug">
+                            <Tick done={t.done} />
+                            <span className={t.done && tipView.it.state !== "done" ? "text-muted line-through" : ""}>{t.title}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </>
+                  )}
+                  {tipView.it.state === "done" && tipView.it.wins.length > 0 && (
+                    <>
+                      <span className="mt-1 text-[11px] font-bold uppercase tracking-[.1em] text-muted">What you got out of it</span>
+                      <ul className="flex flex-col gap-1.5">
+                        {tipView.it.wins.slice(0, 2).map((w) => (
                           <li key={w} className="flex items-start gap-2 text-[13.5px] leading-snug">
-                            <span
-                              className="mt-px flex size-[18px] shrink-0 items-center justify-center rounded-md border-2"
-                              style={
-                                tipView.it.state === "done"
-                                  ? { background: "var(--color-lime)", borderColor: "var(--color-ink)" }
-                                  : { background: "#fff", borderColor: "#b9c1bc" }
-                              }
-                            >
-                              <svg width={10} height={10} viewBox="0 0 24 24" aria-hidden="true">
-                                <path
-                                  d={tipView.it.state === "done" ? "M5 12.5 L10 17 L19 7" : "M12 6 V18 M6 12 H18"}
-                                  fill="none"
-                                  stroke={tipView.it.state === "done" ? "var(--color-ink)" : "#b9c1bc"}
-                                  strokeWidth={4}
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            </span>
+                            <Tick done />
                             {w}
                           </li>
                         ))}
@@ -918,20 +910,10 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
                       {claimError && <p className="text-xs font-semibold text-firm">{claimError}</p>}
                     </div>
                   )}
-                  {tipView.it.id.startsWith("planned-") ? (
-                    tipView.it.state === "open" && (
-                      <Link
-                        prefetch={false}
-                        href="/student/tasks"
-                        className="mt-1.5 self-start text-[13.5px] font-bold text-link underline underline-offset-[3px]"
-                      >
-                        See its tasks on Action items →
-                      </Link>
-                    )
-                  ) : (
+                  {(tipView.it.state !== "planned" || !tipView.it.id.startsWith("planned-")) && (
                     <Link
                       prefetch={false}
-                      href={`/student/tasks/${tipView.it.id}?from=road&open=${encodeURIComponent(semesters[tip!.k].term)}`}
+                      href={tipView.it.href}
                       className="mt-1.5 self-start text-[13.5px] font-bold text-link underline underline-offset-[3px]"
                     >
                       See details →
@@ -1019,6 +1001,21 @@ export function CandyRoad({ firstName, semesters, current, fork, zones, main, ot
         </div>
       </div>
     </section>
+  );
+}
+
+function Tick({ done }: { done?: boolean }) {
+  return (
+    <span
+      className="mt-px flex size-[18px] shrink-0 items-center justify-center rounded-md border-2"
+      style={done ? { background: "var(--color-lime)", borderColor: "var(--color-ink)" } : { background: "#fff", borderColor: "#b9c1bc" }}
+    >
+      {done && (
+        <svg width={10} height={10} viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 12.5 L10 17 L19 7" fill="none" stroke="var(--color-ink)" strokeWidth={4} strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+    </span>
   );
 }
 

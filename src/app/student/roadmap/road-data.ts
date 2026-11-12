@@ -2,7 +2,7 @@ import { INTEREST_COLORS } from "@/components/Backdrop";
 import type { RoadItem, RoadPath, RoadSemester } from "@/components/student/CandyRoad";
 import { shortDate, shortTerm, TZ } from "@/lib/format";
 import { byPlan } from "@/lib/roadmap/focus";
-import { CLAIM_KIND, isMilestone, pastTense, PLANNED, plannedFor, winLabel } from "@/lib/roadmap/milestones";
+import { CLAIM_KIND, isMilestone, milestoneKey, pastTense, PLANNED, plannedFor, tasksFor, winLabel } from "@/lib/roadmap/milestones";
 import { forkAfter, iconFor, semestersFor, slotFor } from "@/lib/roadmap/road";
 import type { Path, Step } from "@/lib/student-data";
 import type { ClassYear } from "@/lib/types";
@@ -35,12 +35,18 @@ export function buildRoadData(input: {
   today?: string;
 }) {
   const slots = semestersFor(input.year, input.gradTerm, input.term);
-  const current = Math.max(0, slots.findIndex((s) => s.term === input.term));
+  const current = Math.max(
+    0,
+    slots.findIndex((s) => s.term === input.term),
+  );
   const fork = forkAfter(slots.length);
   const main = input.pinned[0] ?? null;
 
   const planWins = new Set(
-    PLANNED.flat().flatMap((m) => [pastTense(m.title), main ? pastTense(m.title.replace("your path", main.name)) : ""]).filter(Boolean).map((t) => t.toLowerCase()),
+    PLANNED.flat()
+      .flatMap((m) => [pastTense(m.title), main ? pastTense(m.title.replace("your path", main.name)) : ""])
+      .filter(Boolean)
+      .map((t) => t.toLowerCase()),
   );
   const buckets: Step[][] = slots.map(() => []);
   for (const s of input.steps) {
@@ -70,6 +76,13 @@ export function buildRoadData(input: {
               : "To do this semester"
             : `Planned · ${shortTerm(s.term ?? slot.term)}`;
       const outcomes = (s.outcomes ?? []).filter(Boolean);
+      // What the student did to get here: the action items behind this milestone.
+      const did = tasksFor(milestoneKey(s, main?.name), input.steps, s.term ?? slot.term).filter((t) => t.status === "done");
+      const summary = did.length
+        ? `You finished ${did.length === 1 ? "an action item" : `${did.length} action items`} to get here. Nice work.`
+        : s.source === "student"
+          ? ""
+          : (s.description ?? "");
       return {
         id: s.id,
         label: shorten(winLabel(s)),
@@ -78,8 +91,10 @@ export function buildRoadData(input: {
         state,
         sub,
         mine,
-        about: s.description ?? s.rationale ?? (fromPlan ? "A milestone from your four-year plan. You marked it done." : mine ? "You added this yourself." : s.title),
-        wins: outcomes.length ? outcomes : state !== "done" && s.rationale && s.rationale !== s.description ? [s.rationale] : [],
+        about: summary,
+        wins: outcomes,
+        tasks: did.map((t) => ({ title: t.title, done: true })),
+        href: `/student/roadmap/milestone/${s.id}`,
       };
     });
     // Faded flags: what this semester usually holds, from the four-year guide. This semester's are crimson and
@@ -101,7 +116,10 @@ export function buildRoadData(input: {
                 id: `planned-${k}-${m.key}`,
                 label: shorten(title),
                 title,
-                icon: iconFor(m.key === "fair" ? "event" : m.key === "cert" ? "certification" : m.key === "project" ? "project" : "experience", title),
+                icon: iconFor(
+                  m.key === "fair" ? "event" : m.key === "cert" ? "certification" : m.key === "project" ? "project" : "experience",
+                  title,
+                ),
                 state: now ? ("open" as const) : ("planned" as const),
                 sub: now
                   ? m.dated && when
@@ -111,9 +129,23 @@ export function buildRoadData(input: {
                     : "This semester"
                   : `Planned · ${shortTerm(slot.term)}`,
                 mine: false,
-                about: m.dated ? "Your tasks for it are on Action items. After the day, this flag asks if you went." : now ? "Your tasks for it are on Action items. Mark it done here once it's happened." : "What this semester usually holds. It turns real when you do it.",
-                wins: m.tasks,
-                claim: now ? { title: win, kind: CLAIM_KIND[m.key] ?? "experience", ask: Boolean(m.dated), ready: !m.dated || Boolean(fairDay && input.today && input.today > fairDay) } : undefined,
+                about: "",
+                wins: [],
+                tasks: (() => {
+                  const mine = now ? tasksFor(m.key, input.steps, slot.term) : [];
+                  return mine.length
+                    ? mine.map((t) => ({ title: t.title, done: t.status === "done" }))
+                    : m.tasks.map((t) => ({ title: t, done: false }));
+                })(),
+                href: `/student/roadmap/milestone/planned-${k}-${m.key}`,
+                claim: now
+                  ? {
+                      title: win,
+                      kind: CLAIM_KIND[m.key] ?? "experience",
+                      ask: Boolean(m.dated),
+                      ready: !m.dated || Boolean(fairDay && input.today && input.today > fairDay),
+                    }
+                  : undefined,
               },
             ];
           });
@@ -123,7 +155,17 @@ export function buildRoadData(input: {
 
   const color = (p: Path) => INTEREST_COLORS[p.interest ?? ""]?.color ?? "#9AA49F";
   const mainPath: RoadPath | null = main
-    ? { id: main.id, name: main.name, goal: main.first_job ?? main.name, color: "#14211B", ink: "#FFFFFF", tag: "Pinned", tagBg: "#14211B", tagInk: "#FFFFFF", action: "pinned" }
+    ? {
+        id: main.id,
+        name: main.name,
+        goal: main.first_job ?? main.name,
+        color: "#14211B",
+        ink: "#FFFFFF",
+        tag: "Pinned",
+        tagBg: "#14211B",
+        tagInk: "#FFFFFF",
+        action: "pinned",
+      }
     : null;
   const pinnedCount = input.pinned.length;
   const others: RoadPath[] = input.paths
