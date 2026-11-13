@@ -23,21 +23,32 @@ async function daily<T>(path: string, init?: RequestInit): Promise<T> {
 /** Room names are derived from the session, so a retry finds the same room. */
 export const roomNameFor = (sessionId: string) => `melon-${sessionId}`;
 
+type Room = { name: string; url: string; config?: { exp?: number } };
+const threeHoursFromNow = () => Math.floor(Date.now() / 1000) + 3 * 3600;
+
 /** Creates the session's private room (or finds it if it's already there). Rooms close after 3 hours. */
-export async function ensureRoom(sessionId: string): Promise<{ name: string; url: string }> {
+export async function ensureRoom(sessionId: string): Promise<Room> {
   const name = roomNameFor(sessionId);
+  let room: Room | null = null;
   try {
-    return await daily<{ name: string; url: string }>(`/rooms/${name}`);
+    room = await daily<Room>(`/rooms/${name}`);
   } catch {
-    // Not there yet: create it.
+    // Not there yet: create it below.
   }
-  return daily<{ name: string; url: string }>("/rooms", {
+  if (room) {
+    // A session opened again later (say, the next day) finds its room closed or about to close: give it 3 more hours.
+    if ((room.config?.exp ?? Infinity) < Date.now() / 1000 + 3600) {
+      return daily<Room>(`/rooms/${name}`, { method: "POST", body: JSON.stringify({ properties: { exp: threeHoursFromNow() } }) });
+    }
+    return room;
+  }
+  return daily<Room>("/rooms", {
     method: "POST",
     body: JSON.stringify({
       name,
       privacy: "private",
       properties: {
-        exp: Math.floor(Date.now() / 1000) + 3 * 3600,
+        exp: threeHoursFromNow(),
         eject_at_room_exp: true,
         max_participants: 4,
         enable_prejoin_ui: false,
